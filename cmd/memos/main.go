@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/joho/godotenv"
 
 	"github.com/usememos/memos/internal/profile"
 	"github.com/usememos/memos/internal/version"
@@ -89,6 +90,8 @@ var (
 )
 
 func init() {
+	_ = godotenv.Load()
+
 	viper.SetDefault("mode", "dev")
 	viper.SetDefault("driver", "sqlite")
 	viper.SetDefault("port", 8081)
