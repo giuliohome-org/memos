@@ -11,10 +11,11 @@ export interface CalendarCellProps {
   tooltipText: string;
   onClick?: (date: string) => void;
   size?: CalendarSize;
+  highlight?: boolean;
 }
 
 export const CalendarCell = memo((props: CalendarCellProps) => {
-  const { day, maxCount, tooltipText, onClick, size = "default" } = props;
+  const { day, maxCount, tooltipText, onClick, size = "default", highlight } = props;
 
   const handleClick = () => {
     if (onClick) {
@@ -43,6 +44,7 @@ export const CalendarCell = memo((props: CalendarCellProps) => {
   const buttonClasses = cn(
     baseClasses,
     intensityClass,
+    highlight && "bg-chart-1/50 ring-1 ring-chart-1",
     day.isToday && "ring-2 ring-primary/30 ring-offset-1 font-semibold z-10",
     day.isSelected && "ring-2 ring-primary ring-offset-1 font-bold z-10",
     isInteractive ? "cursor-pointer hover:scale-110 hover:shadow-md hover:z-20" : "cursor-default",

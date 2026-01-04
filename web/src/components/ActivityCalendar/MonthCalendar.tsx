@@ -11,7 +11,7 @@ import { useCalendarMatrix } from "./useCalendar";
 import { getTooltipText } from "./utils";
 
 export const MonthCalendar = memo((props: MonthCalendarProps) => {
-  const { month, data, maxCount, size = "default", onClick, className } = props;
+  const { month, data, maxCount, size = "default", onClick, className, highlightedDays } = props;
   const t = useTranslate();
   const { generalSetting } = useInstance();
   const { getFiltersByFactor } = useMemoFilterContext();
@@ -56,6 +56,7 @@ export const MonthCalendar = memo((props: MonthCalendarProps) => {
                 tooltipText={tooltipText}
                 onClick={onClick}
                 size={size}
+                highlight={highlightedDays?.has(day.date)}
               />
             );
           }),
