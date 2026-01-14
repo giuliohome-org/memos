@@ -4,9 +4,11 @@ import type { MemoExplorerContext } from "@/components/MemoExplorer";
 import { MemoExplorer, MemoExplorerDrawer } from "@/components/MemoExplorer";
 import MobileHeader from "@/components/MobileHeader";
 import { userServiceClient } from "@/connect";
+import { useMemoFilters } from "@/hooks";
 import useCurrentUser from "@/hooks/useCurrentUser";
 import { useFilteredMemoStats } from "@/hooks/useFilteredMemoStats";
 import useMediaQuery from "@/hooks/useMediaQuery";
+import { useMemos } from "@/hooks/useMemoQueries";
 import { cn } from "@/lib/utils";
 import { Routes } from "@/router";
 
@@ -16,6 +18,9 @@ const MainLayout = () => {
   const location = useLocation();
   const currentUser = useCurrentUser();
   const [profileUserName, setProfileUserName] = useState<string | undefined>();
+  const memoFilter = useMemoFilters();
+  const { data: memosResponse } = useMemos({ filter: memoFilter });
+  const memos = memosResponse?.memos || [];
 
   // Determine context based on current route
   const context: MemoExplorerContext = useMemo(() => {
@@ -71,12 +76,12 @@ const MainLayout = () => {
     <section className="@container w-full min-h-full flex flex-col justify-start items-center">
       {!md && (
         <MobileHeader>
-          <MemoExplorerDrawer context={context} statisticsData={statistics} tagCount={tags} />
+          <MemoExplorerDrawer context={context} statisticsData={statistics} tagCount={tags} memos={memos} />
         </MobileHeader>
       )}
       {md && (
         <div className={cn("fixed top-0 left-16 shrink-0 h-svh transition-all", "border-r border-border", lg ? "w-72" : "w-56")}>
-          <MemoExplorer className={cn("px-3 py-6")} context={context} statisticsData={statistics} tagCount={tags} />
+          <MemoExplorer className={cn("px-3 py-6")} context={context} statisticsData={statistics} tagCount={tags} memos={memos} />
         </div>
       )}
       <div className={cn("w-full min-h-full", lg ? "pl-72" : md ? "pl-56" : "")}>

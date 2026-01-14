@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import type { Memo } from "@/types/proto/api/v1/memo_service_pb";
 import type { StatisticsData } from "@/types/statistics";
 import MemoExplorer, { MemoExplorerContext, MemoExplorerFeatures } from "./MemoExplorer";
 
@@ -11,10 +12,11 @@ interface Props {
   features?: MemoExplorerFeatures;
   statisticsData: StatisticsData;
   tagCount: Record<string, number>;
+  memos?: Memo[];
 }
 
 const MemoExplorerDrawer = (props: Props) => {
-  const { context, features, statisticsData, tagCount } = props;
+  const { context, features, statisticsData, tagCount, memos } = props;
   const location = useLocation();
   const [open, setOpen] = useState(false);
 
@@ -33,7 +35,14 @@ const MemoExplorerDrawer = (props: Props) => {
         <SheetHeader>
           <SheetTitle />
         </SheetHeader>
-        <MemoExplorer className="px-4" context={context} features={features} statisticsData={statisticsData} tagCount={tagCount} />
+        <MemoExplorer
+          className="px-4"
+          context={context}
+          features={features}
+          statisticsData={statisticsData}
+          tagCount={tagCount}
+          memos={memos}
+        />
       </SheetContent>
     </Sheet>
   );

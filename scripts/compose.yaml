@@ -1,6 +1,8 @@
 services:
   memos:
-    image: neosmemo/memos:latest
+    build:
+      context: ..
+      dockerfile: scripts/Dockerfile
     container_name: memos
     volumes:
       - ~/.memos/:/var/opt/memos

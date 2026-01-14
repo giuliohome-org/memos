@@ -27,6 +27,7 @@ export interface MonthCalendarProps {
   size?: CalendarSize;
   onClick?: (date: string) => void;
   className?: string;
+  highlightedDays?: Set<string>;
 }
 
 export interface YearCalendarProps {
