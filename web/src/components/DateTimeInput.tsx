@@ -2,13 +2,8 @@ import dayjs from "dayjs";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
 
-// must be compatible with JS Date.parse(), we use ISO 8601 (almost)
-const DATE_TIME_FORMAT = "YYYY-MM-DD HH:mm:ss";
-
-// convert Date to datetime string.
-const formatDate = (date: Date): string => {
-  return dayjs(date).format(DATE_TIME_FORMAT);
-};
+// HTML5 datetime-local input requires this exact format (with the 'T' separator)
+const HTML_INPUT_FORMAT = "YYYY-MM-DDTHH:mm";
 
 interface Props {
   value: Date;
@@ -16,26 +11,33 @@ interface Props {
 }
 
 const DateTimeInput: React.FC<Props> = ({ value, onChange }) => {
+  // Convert the Date object to a string the input can understand
+  const formattedValue = dayjs(value).format(HTML_INPUT_FORMAT);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const inputValue = e.target.value;
+
+    if (inputValue) {
+      const newDate = dayjs(inputValue).toDate();
+
+      if (!isNaN(newDate.getTime())) {
+        onChange(newDate);
+      } else {
+        toast.error("Invalid date selected");
+      }
+    }
+  };
+
   return (
     <input
       type="datetime-local"
-      className={cn("px-1 bg-transparent rounded text-xs transition-all", "border-transparent outline-none focus:border-border", "border")}
-      defaultValue={formatDate(value)}
-      onBlur={(e) => {
-        const inputValue = e.target.value;
-        if (inputValue) {
-          // note: inputValue must be compatible with JS Date.parse()
-          const date = dayjs(inputValue).toDate();
-          // Check if the date is valid.
-          if (!isNaN(date.getTime())) {
-            onChange(date);
-          } else {
-            toast.error("Invalid datetime format. Use format: 2023-12-31 23:59:59");
-            e.target.value = formatDate(value);
-          }
-        }
-      }}
-      placeholder={DATE_TIME_FORMAT}
+      className={cn(
+        "px-1 bg-transparent rounded text-xs transition-all",
+        "border-transparent outline-none focus:border-border",
+        "border",
+      )}
+      value={formattedValue}
+      onChange={handleChange}
     />
   );
 };

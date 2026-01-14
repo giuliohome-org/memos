@@ -25,7 +25,7 @@ export const useMemoInit = (
 
       try {
         if (memoName) {
-          // Load existing memo
+          // Load existing memo - use timestamps from DB
           const loadedState = await memoService.load(memoName);
           dispatch(
             actions.initMemo({
@@ -35,12 +35,11 @@ export const useMemoInit = (
             }),
           );
         } else {
-          // New memo: first apply date filter if not already set, then load from cache
+          // New memo: set createTime from date filter if active, otherwise use current time
           if (!state.timestamps.createTime) {
             const displayTimeFilter = getFiltersByFactor("displayTime")?.[0]?.value;
-            if (displayTimeFilter) {
-              dispatch(actions.setTimestamps({ createTime: dayjs(displayTimeFilter).toDate() }));
-            }
+            const createTime = displayTimeFilter ? dayjs(displayTimeFilter).toDate() : new Date();
+            dispatch(actions.setTimestamps({ createTime }));
           }
 
           const cachedContent = cacheService.load(cacheService.key(username, cacheKey));
