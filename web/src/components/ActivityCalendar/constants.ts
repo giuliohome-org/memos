@@ -29,7 +29,7 @@ export const SMALL_CELL_SIZE = {
 } as const;
 
 export const DEFAULT_CELL_SIZE = {
-  font: "text-xs",
+  font: "text-sm",
   borderRadius: "rounded-md",
   gap: "gap-1.5",
 } as const;

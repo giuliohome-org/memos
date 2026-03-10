@@ -62,19 +62,20 @@ export const CalendarCell = memo((props: CalendarCellProps) => {
       aria-label={ariaLabel}
       aria-current={day.isToday ? "date" : undefined}
       aria-disabled={!isInteractive}
-      className={cn(buttonClasses, uniqueColors && "flex-col gap-0 leading-none")}
+      className={cn(buttonClasses, uniqueColors && "flex-col gap-0 leading-none p-0.5")}
     >
       <span>{day.label}</span>
       {uniqueColors && (
-        <span className="flex gap-px justify-center">
+        <span className="flex gap-0.5 justify-center items-center w-full">
           {uniqueColors.map((color, i) => (
             <span
               key={i}
-              className="inline-block rounded-full"
+              className="rounded-full flex-1"
               style={{
                 backgroundColor: color,
-                width: size === "small" ? 4 : 5,
-                height: size === "small" ? 4 : 5,
+                // Single dot: tall bar; more dots: share the space equally
+                height: uniqueColors.length <= 2 ? 6 : 4,
+                maxWidth: uniqueColors.length === 1 ? "80%" : undefined,
               }}
             />
           ))}

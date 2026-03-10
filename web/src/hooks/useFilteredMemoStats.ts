@@ -9,7 +9,6 @@ import type { StatisticsData } from "@/types/statistics";
 export interface FilteredMemoStats {
   statistics: StatisticsData;
   tags: Record<string, number>;
-  tagsByDate: Record<string, string[]>;
   loading: boolean;
 }
 
@@ -30,7 +29,6 @@ export const useFilteredMemoStats = (options: UseFilteredMemoStatsOptions = {}):
     const loading = isLoadingUserStats || isLoadingMemos;
     let activityStats: Record<string, number> = {};
     let tagCount: Record<string, number> = {};
-    const tagsByDate: Record<string, string[]> = {};
 
     // Try to use backend user stats if userName is provided and available
     if (userName && userStats) {
@@ -58,16 +56,6 @@ export const useFilteredMemoStats = (options: UseFilteredMemoStatsOptions = {}):
         const displayTime = memo.displayTime ? timestampDate(memo.displayTime) : undefined;
         if (displayTime) {
           displayTimeList.push(displayTime);
-          // Collect tags per date
-          if (memo.tags && memo.tags.length > 0) {
-            const dateStr = dayjs(displayTime).format("YYYY-MM-DD");
-            if (!tagsByDate[dateStr]) tagsByDate[dateStr] = [];
-            for (const tag of memo.tags) {
-              if (!tagsByDate[dateStr].includes(tag)) {
-                tagsByDate[dateStr].push(tag);
-              }
-            }
-          }
         }
         // Count tags
         if (memo.tags && memo.tags.length > 0) {
@@ -80,26 +68,9 @@ export const useFilteredMemoStats = (options: UseFilteredMemoStatsOptions = {}):
       activityStats = countBy(displayTimeList.map((date) => dayjs(date).format("YYYY-MM-DD")));
     }
 
-    // Also compute tagsByDate from memos when using backend stats
-    if (userName && userStats && memosResponse?.memos) {
-      for (const memo of memosResponse.memos) {
-        const displayTime = memo.displayTime ? timestampDate(memo.displayTime) : undefined;
-        if (displayTime && memo.tags && memo.tags.length > 0) {
-          const dateStr = dayjs(displayTime).format("YYYY-MM-DD");
-          if (!tagsByDate[dateStr]) tagsByDate[dateStr] = [];
-          for (const tag of memo.tags) {
-            if (!tagsByDate[dateStr].includes(tag)) {
-              tagsByDate[dateStr].push(tag);
-            }
-          }
-        }
-      }
-    }
-
     return {
       statistics: { activityStats },
       tags: tagCount,
-      tagsByDate,
       loading,
     };
   }, [userName, userStats, memosResponse, isLoadingUserStats, isLoadingMemos]);

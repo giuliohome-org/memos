@@ -1,6 +1,7 @@
 import { memo, useMemo } from "react";
 import { useInstance } from "@/contexts/InstanceContext";
 import { useMemoFilterContext } from "@/contexts/MemoFilterContext";
+import { useTagCalendarData } from "@/hooks/useTagCalendarData";
 import { cn } from "@/lib/utils";
 import { useTranslate } from "@/utils/i18n";
 import { CalendarCell } from "./CalendarCell";
@@ -11,10 +12,11 @@ import { useCalendarMatrix } from "./useCalendar";
 import { getTooltipText } from "./utils";
 
 export const MonthCalendar = memo((props: MonthCalendarProps) => {
-  const { month, data, maxCount, size = "default", onClick, className, highlightedDays, tagsByDate, tagColors } = props;
+  const { month, data, maxCount, size = "default", onClick, className, highlightedDays } = props;
   const t = useTranslate();
   const { generalSetting } = useInstance();
   const { getFiltersByFactor } = useMemoFilterContext();
+  const { getColorsForDate } = useTagCalendarData();
 
   const weekStartDayOffset = generalSetting.weekStartDayOffset;
 
@@ -47,11 +49,6 @@ export const MonthCalendar = memo((props: MonthCalendarProps) => {
         {weeks.map((week, weekIndex) =>
           week.days.map((day, dayIndex) => {
             const tooltipText = getTooltipText(day.count, day.date, t);
-            // Collect colors for tags on this date
-            const dayTags = tagsByDate?.[day.date];
-            const dayTagColors = dayTags && tagColors
-              ? dayTags.map((tag) => tagColors[tag]).filter((c): c is string => Boolean(c))
-              : undefined;
 
             return (
               <CalendarCell
@@ -62,7 +59,7 @@ export const MonthCalendar = memo((props: MonthCalendarProps) => {
                 onClick={onClick}
                 size={size}
                 highlight={highlightedDays?.has(day.date)}
-                tagColors={dayTagColors && dayTagColors.length > 0 ? dayTagColors : undefined}
+                tagColors={getColorsForDate(day.date)}
               />
             );
           }),
