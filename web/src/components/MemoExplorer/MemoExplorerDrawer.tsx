@@ -12,11 +12,12 @@ interface Props {
   features?: MemoExplorerFeatures;
   statisticsData: StatisticsData;
   tagCount: Record<string, number>;
+  tagsByDate: Record<string, string[]>;
   memos?: Memo[];
 }
 
 const MemoExplorerDrawer = (props: Props) => {
-  const { context, features, statisticsData, tagCount, memos } = props;
+  const { context, features, statisticsData, tagCount, tagsByDate, memos } = props;
   const location = useLocation();
   const [open, setOpen] = useState(false);
 
@@ -41,6 +42,7 @@ const MemoExplorerDrawer = (props: Props) => {
           features={features}
           statisticsData={statisticsData}
           tagCount={tagCount}
+          tagsByDate={tagsByDate}
           memos={memos}
         />
       </SheetContent>

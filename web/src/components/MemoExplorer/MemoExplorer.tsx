@@ -21,6 +21,7 @@ interface Props {
   features?: MemoExplorerFeatures;
   statisticsData: StatisticsData;
   tagCount: Record<string, number>;
+  tagsByDate: Record<string, string[]>;
   memos?: Memo[];
 }
 
@@ -58,7 +59,7 @@ const getDefaultFeatures = (context: MemoExplorerContext): MemoExplorerFeatures 
   }
 };
 const MemoExplorer = (props: Props) => {
-  const { className, context = "home", features: featureOverrides = {}, statisticsData, tagCount, memos } = props;
+  const { className, context = "home", features: featureOverrides = {}, statisticsData, tagCount, tagsByDate, memos } = props;
   const currentUser = useCurrentUser();
 
   // Merge default features with overrides
@@ -76,7 +77,7 @@ const MemoExplorer = (props: Props) => {
     >
       {features.search && <SearchBar />}
       <div className="mt-1 px-1 w-full">
-        {features.statistics && <StatisticsView statisticsData={statisticsData} memos={memos} />}
+        {features.statistics && <StatisticsView statisticsData={statisticsData} tagsByDate={tagsByDate} memos={memos} />}
         {features.shortcuts && currentUser && <ShortcutsSection />}
         {features.tags && <TagsSection readonly={context === "explore"} tagCount={tagCount} />}
       </div>

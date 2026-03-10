@@ -12,10 +12,11 @@ export interface CalendarCellProps {
   onClick?: (date: string) => void;
   size?: CalendarSize;
   highlight?: boolean;
+  tagColors?: string[];
 }
 
 export const CalendarCell = memo((props: CalendarCellProps) => {
-  const { day, maxCount, tooltipText, onClick, size = "default", highlight } = props;
+  const { day, maxCount, tooltipText, onClick, size = "default", highlight, tagColors } = props;
 
   const handleClick = () => {
     if (onClick) {
@@ -50,6 +51,9 @@ export const CalendarCell = memo((props: CalendarCellProps) => {
     isInteractive ? "cursor-pointer hover:scale-110 hover:shadow-md hover:z-20" : "cursor-default",
   );
 
+  // Deduplicate colors and limit to 4
+  const uniqueColors = tagColors ? [...new Set(tagColors)].slice(0, 4) : undefined;
+
   const button = (
     <button
       type="button"
@@ -58,9 +62,24 @@ export const CalendarCell = memo((props: CalendarCellProps) => {
       aria-label={ariaLabel}
       aria-current={day.isToday ? "date" : undefined}
       aria-disabled={!isInteractive}
-      className={buttonClasses}
+      className={cn(buttonClasses, uniqueColors && "flex-col gap-0 leading-none")}
     >
-      {day.label}
+      <span>{day.label}</span>
+      {uniqueColors && (
+        <span className="flex gap-px justify-center">
+          {uniqueColors.map((color, i) => (
+            <span
+              key={i}
+              className="inline-block rounded-full"
+              style={{
+                backgroundColor: color,
+                width: size === "small" ? 4 : 5,
+                height: size === "small" ? 4 : 5,
+              }}
+            />
+          ))}
+        </span>
+      )}
     </button>
   );
 

@@ -1,7 +1,9 @@
-import { HashIcon, MoreVerticalIcon, TagsIcon } from "lucide-react";
+import { HashIcon, MoreVerticalIcon, TagsIcon, XIcon } from "lucide-react";
+import { useState } from "react";
 import useLocalStorage from "react-use/lib/useLocalStorage";
 import { Switch } from "@/components/ui/switch";
 import { type MemoFilter, useMemoFilterContext } from "@/contexts/MemoFilterContext";
+import { TAG_COLOR_PALETTE, useTagColors } from "@/hooks/useTagColors";
 import { cn } from "@/lib/utils";
 import { useTranslate } from "@/utils/i18n";
 import TagTree from "../TagTree";
@@ -17,6 +19,8 @@ const TagsSection = (props: Props) => {
   const { getFiltersByFactor, addFilter, removeFilter } = useMemoFilterContext();
   const [treeMode, setTreeMode] = useLocalStorage<boolean>("tag-view-as-tree", false);
   const [treeAutoExpand, setTreeAutoExpand] = useLocalStorage<boolean>("tag-tree-auto-expand", false);
+  const { tagColors, setTagColor } = useTagColors();
+  const [colorPickerTag, setColorPickerTag] = useState<string | null>(null);
 
   const tags = Object.entries(props.tagCount)
     .sort((a, b) => a[0].localeCompare(b[0]))
@@ -65,21 +69,67 @@ const TagsSection = (props: Props) => {
           <div className="w-full flex flex-row justify-start items-center relative flex-wrap gap-x-2 gap-y-1.5">
             {tags.map(([tag, amount]) => {
               const isActive = getFiltersByFactor("tagSearch").some((filter: MemoFilter) => filter.value === tag);
+              const tagColor = tagColors[tag];
               return (
-                <div
-                  key={tag}
-                  className={cn(
-                    "shrink-0 w-auto max-w-full text-sm rounded-md leading-6 flex flex-row justify-start items-center select-none cursor-pointer transition-colors",
-                    "hover:opacity-80",
-                    isActive ? "text-primary" : "text-muted-foreground",
-                  )}
-                  onClick={() => handleTagClick(tag)}
-                >
-                  <HashIcon className="w-4 h-auto shrink-0" />
-                  <div className="inline-flex flex-nowrap ml-0.5 gap-0.5 max-w-[calc(100%-16px)]">
-                    <span className={cn("truncate", isActive ? "font-medium" : "")}>{tag}</span>
-                    {amount > 1 && <span className="opacity-60 shrink-0">({amount})</span>}
+                <div key={tag} className="relative">
+                  <div
+                    className={cn(
+                      "shrink-0 w-auto max-w-full text-sm rounded-md leading-6 flex flex-row justify-start items-center select-none cursor-pointer transition-colors",
+                      "hover:opacity-80",
+                      isActive ? "text-primary" : "text-muted-foreground",
+                    )}
+                    onClick={() => handleTagClick(tag)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setColorPickerTag(colorPickerTag === tag ? null : tag);
+                    }}
+                  >
+                    {tagColor ? (
+                      <span
+                        className="w-3 h-3 rounded-full shrink-0 mr-0.5"
+                        style={{ backgroundColor: tagColor }}
+                      />
+                    ) : (
+                      <HashIcon className="w-4 h-auto shrink-0" />
+                    )}
+                    <div className="inline-flex flex-nowrap ml-0.5 gap-0.5 max-w-[calc(100%-16px)]">
+                      <span className={cn("truncate", isActive ? "font-medium" : "")}>{tag}</span>
+                      {amount > 1 && <span className="opacity-60 shrink-0">({amount})</span>}
+                    </div>
                   </div>
+                  {colorPickerTag === tag && (
+                    <div className="absolute left-0 top-full z-50 mt-1 p-2 bg-popover border border-border rounded-lg shadow-lg flex flex-wrap gap-1.5 w-[140px]">
+                      {TAG_COLOR_PALETTE.map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          className={cn(
+                            "w-6 h-6 rounded-full border-2 transition-transform hover:scale-110",
+                            tagColor === color ? "border-foreground scale-110" : "border-transparent",
+                          )}
+                          style={{ backgroundColor: color }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTagColor(tag, tagColor === color ? null : color);
+                            setColorPickerTag(null);
+                          }}
+                        />
+                      ))}
+                      {tagColor && (
+                        <button
+                          type="button"
+                          className="w-6 h-6 rounded-full border border-border flex items-center justify-center hover:bg-secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTagColor(tag, null);
+                            setColorPickerTag(null);
+                          }}
+                        >
+                          <XIcon className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}

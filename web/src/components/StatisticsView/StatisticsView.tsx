@@ -3,19 +3,22 @@ import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 import { MonthCalendar } from "@/components/ActivityCalendar";
 import { useDateFilterNavigation } from "@/hooks";
+import { useTagColors } from "@/hooks/useTagColors";
 import type { Memo } from "@/types/proto/api/v1/memo_service_pb";
 import type { StatisticsData } from "@/types/statistics";
 import { MonthNavigator } from "./MonthNavigator";
 
 interface Props {
   statisticsData: StatisticsData;
+  tagsByDate: Record<string, string[]>;
   memos?: Memo[];
 }
 
 const StatisticsView = (props: Props) => {
-  const { statisticsData, memos } = props;
+  const { statisticsData, tagsByDate, memos } = props;
   const { activityStats } = statisticsData;
   const navigateToDateFilter = useDateFilterNavigation();
+  const { tagColors } = useTagColors();
   const [visibleMonthString, setVisibleMonthString] = useState(dayjs().format("YYYY-MM"));
 
   const maxCount = useMemo(() => {
@@ -44,6 +47,8 @@ const StatisticsView = (props: Props) => {
           maxCount={maxCount}
           onClick={navigateToDateFilter}
           highlightedDays={highlightedDays}
+          tagsByDate={tagsByDate}
+          tagColors={tagColors}
         />
       </div>
     </div>

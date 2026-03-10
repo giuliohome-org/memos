@@ -70,18 +70,18 @@ const MainLayout = () => {
 
   // Fetch stats from memo store cache (populated by PagedMemoList)
   // For user-scoped contexts, use backend user stats for tags (unaffected by filters)
-  const { statistics, tags } = useFilteredMemoStats({ userName: statsUserName });
+  const { statistics, tags, tagsByDate } = useFilteredMemoStats({ userName: statsUserName });
 
   return (
     <section className="@container w-full min-h-full flex flex-col justify-start items-center">
       {!md && (
         <MobileHeader>
-          <MemoExplorerDrawer context={context} statisticsData={statistics} tagCount={tags} memos={memos} />
+          <MemoExplorerDrawer context={context} statisticsData={statistics} tagCount={tags} tagsByDate={tagsByDate} memos={memos} />
         </MobileHeader>
       )}
       {md && (
         <div className={cn("fixed top-0 left-16 shrink-0 h-svh transition-all", "border-r border-border", lg ? "w-72" : "w-56")}>
-          <MemoExplorer className={cn("px-3 py-6")} context={context} statisticsData={statistics} tagCount={tags} memos={memos} />
+          <MemoExplorer className={cn("px-3 py-6")} context={context} statisticsData={statistics} tagCount={tags} tagsByDate={tagsByDate} memos={memos} />
         </div>
       )}
       <div className={cn("w-full min-h-full", lg ? "pl-72" : md ? "pl-56" : "")}>

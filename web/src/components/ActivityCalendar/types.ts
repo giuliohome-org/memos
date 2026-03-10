@@ -28,6 +28,8 @@ export interface MonthCalendarProps {
   onClick?: (date: string) => void;
   className?: string;
   highlightedDays?: Set<string>;
+  tagsByDate?: Record<string, string[]>;
+  tagColors?: Record<string, string>;
 }
 
 export interface YearCalendarProps {
