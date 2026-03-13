@@ -5,6 +5,7 @@ import { MemoExplorer, MemoExplorerDrawer } from "@/components/MemoExplorer";
 import MobileHeader from "@/components/MobileHeader";
 import { userServiceClient } from "@/connect";
 import { useMemoFilters } from "@/hooks";
+import { useMemoFilterContext } from "@/contexts/MemoFilterContext";
 import useCurrentUser from "@/hooks/useCurrentUser";
 import { useFilteredMemoStats } from "@/hooks/useFilteredMemoStats";
 import useMediaQuery from "@/hooks/useMediaQuery";
@@ -18,6 +19,7 @@ const MainLayout = () => {
   const location = useLocation();
   const currentUser = useCurrentUser();
   const [profileUserName, setProfileUserName] = useState<string | undefined>();
+  const { hasActiveFilters } = useMemoFilterContext();
   const memoFilter = useMemoFilters();
   const { data: memosResponse } = useMemos({ filter: memoFilter });
   const memos = memosResponse?.memos || [];
@@ -76,12 +78,12 @@ const MainLayout = () => {
     <section className="@container w-full min-h-full flex flex-col justify-start items-center">
       {!md && (
         <MobileHeader>
-          <MemoExplorerDrawer context={context} statisticsData={statistics} tagCount={tags} memos={memos} />
+          <MemoExplorerDrawer context={context} statisticsData={statistics} tagCount={tags} memos={hasActiveFilters ? memos : undefined} />
         </MobileHeader>
       )}
       {md && (
         <div className={cn("fixed top-0 left-16 shrink-0 h-svh transition-all", "border-r border-border", lg ? "w-96" : "w-72")}>
-          <MemoExplorer className={cn("px-3 py-6")} context={context} statisticsData={statistics} tagCount={tags} memos={memos} />
+          <MemoExplorer className={cn("px-3 py-6")} context={context} statisticsData={statistics} tagCount={tags} memos={hasActiveFilters ? memos : undefined} />
         </div>
       )}
       <div className={cn("w-full min-h-full", lg ? "pl-96" : md ? "pl-72" : "")}>
