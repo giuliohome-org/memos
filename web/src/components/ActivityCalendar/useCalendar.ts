@@ -10,6 +10,7 @@ export interface UseCalendarMatrixParams {
   weekStartDayOffset: number;
   today: string;
   selectedDate: string;
+  workdaysOnly?: boolean;
 }
 
 const createCalendarDayCell = (
@@ -55,6 +56,7 @@ export const useCalendarMatrix = ({
   weekStartDayOffset,
   today,
   selectedDate,
+  workdaysOnly,
 }: UseCalendarMatrixParams): CalendarMatrixResult => {
   return useMemo(() => {
     // Determine the start of the month and its formatted key (YYYY-MM)
@@ -62,7 +64,7 @@ export const useCalendarMatrix = ({
     const monthKey = monthStart.format("YYYY-MM");
 
     // Rotate week labels based on the user's preferred start of the week
-    const rotatedWeekDays = weekDays.slice(weekStartDayOffset).concat(weekDays.slice(0, weekStartDayOffset));
+    let rotatedWeekDays = weekDays.slice(weekStartDayOffset).concat(weekDays.slice(0, weekStartDayOffset));
 
     // Calculate the start and end dates for the calendar grid to ensure full weeks
     const { calendarStart, dayCount } = calculateCalendarBoundaries(monthStart, weekStartDayOffset);
@@ -73,6 +75,12 @@ export const useCalendarMatrix = ({
     // Iterate through each day in the calendar grid
     for (let index = 0; index < dayCount; index += 1) {
       const current = calendarStart.add(index, "day");
+      const isWeekend = WEEKEND_DAYS.includes(current.day() as 0 | 6);
+
+      if (workdaysOnly && isWeekend) {
+        continue;
+      }
+
       const weekIndex = Math.floor(index / DAYS_IN_WEEK);
 
       if (!weeks[weekIndex]) {
@@ -85,10 +93,27 @@ export const useCalendarMatrix = ({
       maxCount = Math.max(maxCount, dayCell.count);
     }
 
+    if (workdaysOnly) {
+      // Filter out weekend labels
+      rotatedWeekDays = rotatedWeekDays.filter((_, index) => {
+        const day = (index + weekStartDayOffset) % DAYS_IN_WEEK;
+        return !WEEKEND_DAYS.includes(day as 0 | 6);
+      });
+      // Compact weeks to remove empty entries if any (though floor(index/DAYS_IN_WEEK) might result in some weeks being empty or weird)
+      // Actually, if we just continue, the weekIndex will skip some.
+      // Better to re-index weeks.
+      const filteredWeeks = weeks.filter((w) => w && w.days.length > 0);
+      return {
+        weeks: filteredWeeks,
+        weekDays: rotatedWeekDays,
+        maxCount: Math.max(maxCount, MIN_COUNT),
+      };
+    }
+
     return {
       weeks,
       weekDays: rotatedWeekDays,
       maxCount: Math.max(maxCount, MIN_COUNT),
     };
-  }, [month, data, weekDays, weekStartDayOffset, today, selectedDate]);
+  }, [month, data, weekDays, weekStartDayOffset, today, selectedDate, workdaysOnly]);
 };

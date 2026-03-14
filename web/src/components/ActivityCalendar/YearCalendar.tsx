@@ -14,7 +14,7 @@ import { useTranslate } from "@/utils/i18n";
 import { getMaxYear, MIN_YEAR } from "./constants";
 import type { YearCalendarProps } from "./types";
 
-export const YearCalendar = ({ selectedYear, data, onYearChange, onDateClick, className }: YearCalendarProps) => {
+export const YearCalendar = ({ selectedYear, data, onYearChange, onDateClick, className, workdaysOnly }: YearCalendarProps) => {
   const t = useTranslate();
   const currentYear = useMemo(() => new Date().getFullYear(), []);
   const yearData = useMemo(() => filterDataByYear(data, selectedYear), [data, selectedYear]);
@@ -82,7 +82,7 @@ export const YearCalendar = ({ selectedYear, data, onYearChange, onDateClick, cl
                 className="flex flex-col gap-3 rounded-lg p-3 hover:bg-secondary/40 transition-colors cursor-default border border-transparent hover:border-border/50"
               >
                 <div className="text-xs font-bold text-foreground/80 uppercase tracking-widest pl-1">{getMonthLabel(month)}</div>
-                <MonthCalendar month={month} data={yearData} maxCount={yearMaxCount} size="small" onClick={onDateClick} />
+                <MonthCalendar month={month} data={yearData} maxCount={yearMaxCount} size="small" onClick={onDateClick} workdaysOnly={workdaysOnly} />
               </div>
             ))}
           </div>

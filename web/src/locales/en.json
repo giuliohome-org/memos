@@ -27,6 +27,8 @@
     "basic": "Basic",
     "beta": "Beta",
     "calendar": "Calendar",
+    "show-workdays-only": "Show workdays only",
+    "show-all-days": "Show all days",
     "cancel": "Cancel",
     "change": "Change",
     "clear": "Clear",

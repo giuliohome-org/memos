@@ -1,6 +1,7 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import dayjs from "dayjs";
 import { useMemo, useState } from "react";
+import useLocalStorage from "react-use/lib/useLocalStorage";
 import { MonthCalendar } from "@/components/ActivityCalendar";
 import { useDateFilterNavigation } from "@/hooks";
 import type { Memo } from "@/types/proto/api/v1/memo_service_pb";
@@ -17,6 +18,7 @@ const StatisticsView = (props: Props) => {
   const { activityStats } = statisticsData;
   const navigateToDateFilter = useDateFilterNavigation();
   const [visibleMonthString, setVisibleMonthString] = useState(dayjs().format("YYYY-MM"));
+  const [workdaysOnly, setWorkdaysOnly] = useLocalStorage<boolean>("calendar-workdays-only", false);
 
   const maxCount = useMemo(() => {
     const counts = Object.values(activityStats);
@@ -35,7 +37,13 @@ const StatisticsView = (props: Props) => {
 
   return (
     <div className="group w-full mt-2 flex flex-col text-muted-foreground animate-fade-in">
-      <MonthNavigator visibleMonth={visibleMonthString} onMonthChange={setVisibleMonthString} activityStats={activityStats} />
+      <MonthNavigator
+        visibleMonth={visibleMonthString}
+        onMonthChange={setVisibleMonthString}
+        activityStats={activityStats}
+        workdaysOnly={workdaysOnly}
+        onWorkdaysOnlyChange={setWorkdaysOnly}
+      />
 
       <div className="w-full animate-scale-in">
         <MonthCalendar
@@ -44,6 +52,7 @@ const StatisticsView = (props: Props) => {
           maxCount={maxCount}
           onClick={navigateToDateFilter}
           highlightedDays={highlightedDays}
+          workdaysOnly={workdaysOnly}
         />
       </div>
     </div>

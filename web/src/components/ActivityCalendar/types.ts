@@ -28,6 +28,7 @@ export interface MonthCalendarProps {
   onClick?: (date: string) => void;
   className?: string;
   highlightedDays?: Set<string>;
+  workdaysOnly?: boolean;
 }
 
 export interface YearCalendarProps {
@@ -36,4 +37,5 @@ export interface YearCalendarProps {
   onYearChange: (year: number) => void;
   onDateClick: (date: string) => void;
   className?: string;
+  workdaysOnly?: boolean;
 }
