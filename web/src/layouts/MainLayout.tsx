@@ -3,6 +3,7 @@ import { matchPath, Outlet, useLocation } from "react-router-dom";
 import type { MemoExplorerContext } from "@/components/MemoExplorer";
 import { MemoExplorer, MemoExplorerDrawer } from "@/components/MemoExplorer";
 import MobileHeader from "@/components/MobileHeader";
+import StatisticsView from "@/components/StatisticsView";
 import { userServiceClient } from "@/connect";
 import { useMemoFilters } from "@/hooks";
 import { useMemoFilterContext } from "@/contexts/MemoFilterContext";
@@ -78,16 +79,32 @@ const MainLayout = () => {
     <section className="@container w-full min-h-full flex flex-col justify-start items-center">
       {!md && (
         <MobileHeader>
-          <MemoExplorerDrawer context={context} statisticsData={statistics} tagCount={tags} memos={hasActiveFilters ? memos : undefined} />
+          <MemoExplorerDrawer
+            context={context}
+            features={{ statistics: false }}
+            statisticsData={statistics}
+            tagCount={tags}
+            memos={hasActiveFilters ? memos : undefined}
+          />
         </MobileHeader>
       )}
       {md && (
-        <div className={cn("fixed top-0 left-16 shrink-0 h-svh transition-all", "border-r border-border", lg ? "w-96" : "w-72")}>
-          <MemoExplorer className={cn("px-3 py-6")} context={context} statisticsData={statistics} tagCount={tags} memos={hasActiveFilters ? memos : undefined} />
+        <div className={cn("fixed top-0 left-16 shrink-0 h-svh transition-all", "border-r border-border", lg ? "w-56" : "w-48")}>
+          <MemoExplorer
+            className={cn("px-3 py-6")}
+            context={context}
+            features={{ statistics: false }}
+            statisticsData={statistics}
+            tagCount={tags}
+            memos={hasActiveFilters ? memos : undefined}
+          />
         </div>
       )}
-      <div className={cn("w-full min-h-full", lg ? "pl-96" : md ? "pl-72" : "")}>
+      <div className={cn("w-full min-h-full", lg ? "pl-56" : md ? "pl-48" : "")}>
         <div className={cn("w-full mx-auto px-4 sm:px-6 md:pt-6 pb-8")}>
+          <div className="w-full max-w-3xl mx-auto mb-6">
+            <StatisticsView statisticsData={statistics} memos={hasActiveFilters ? memos : undefined} />
+          </div>
           <Outlet />
         </div>
       </div>
