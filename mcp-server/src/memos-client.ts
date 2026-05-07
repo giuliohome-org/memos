@@ -138,7 +138,9 @@ export class MemosClient {
     }
     if (params.displayTime !== undefined) {
       body.displayTime = params.displayTime;
-      updateFields.push("displayTime");
+      // Memos server checks update_mask paths in snake_case; camelCase is
+      // silently ignored. JSON body keeps proto3-default camelCase.
+      updateFields.push("display_time");
     }
 
     const updateMask = updateFields.join(",");
