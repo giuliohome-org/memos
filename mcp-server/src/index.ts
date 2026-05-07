@@ -1,14 +1,23 @@
+import express from "express";
+import { timingSafeEqual } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod/v3";
 import { MemosClient } from "./memos-client.js";
 
 const MEMOS_URL = process.env.MEMOS_URL || "http://localhost:8081";
 const MEMOS_TOKEN = process.env.MEMOS_TOKEN;
+const MCP_BEARER_TOKEN = process.env.MCP_BEARER_TOKEN;
+const PORT = parseInt(process.env.PORT ?? "3000", 10);
 
 if (!MEMOS_TOKEN) {
   console.error("MEMOS_TOKEN environment variable is required.");
   console.error("Get one from Memos Settings > Personal Access Tokens.");
+  process.exit(1);
+}
+if (!MCP_BEARER_TOKEN) {
+  console.error("MCP_BEARER_TOKEN environment variable is required.");
+  console.error("Generate one with: openssl rand -hex 32");
   process.exit(1);
 }
 
@@ -172,10 +181,46 @@ server.tool(
   },
 );
 
+function bearerOk(presented: string): boolean {
+  const expected = `Bearer ${MCP_BEARER_TOKEN}`;
+  const a = Buffer.from(presented);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 async function main(): Promise<void> {
-  const transport = new StdioServerTransport();
+  const app = express();
+  app.use(express.json({ limit: "1mb" }));
+
+  app.use("/mcp", (req, res, next) => {
+    if (!bearerOk(req.header("authorization") ?? "")) {
+      res.status(401).end();
+      return;
+    }
+    next();
+  });
+
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined, // stateless
+  });
   await server.connect(transport);
-  console.error("Memos MCP server started");
+
+  app.post("/mcp", (req, res) => {
+    transport.handleRequest(req, res, req.body).catch((err) => {
+      console.error("MCP handler error:", err);
+      if (!res.headersSent) res.status(500).end();
+    });
+  });
+  app.get("/mcp", (req, res) => {
+    transport.handleRequest(req, res).catch((err) => {
+      console.error("MCP handler error:", err);
+      if (!res.headersSent) res.status(500).end();
+    });
+  });
+
+  app.listen(PORT, () => {
+    console.error(`Memos MCP server listening on :${PORT} (POST /mcp, bearer-gated)`);
+  });
 }
 
 main().catch((err) => {

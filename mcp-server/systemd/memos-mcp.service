@@ -1,0 +1,16 @@
+[Unit]
+Description=Memos MCP Server
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/react/memos/mcp-server
+ExecStart=/usr/bin/node %h/react/memos/mcp-server/dist/index.js
+EnvironmentFile=%h/.memos-mcp.env
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
