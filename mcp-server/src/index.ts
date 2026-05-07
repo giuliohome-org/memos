@@ -8,7 +8,7 @@ import { MemosClient } from "./memos-client.js";
 const MEMOS_URL = process.env.MEMOS_URL || "http://localhost:8081";
 const MEMOS_TOKEN = process.env.MEMOS_TOKEN;
 const MCP_BEARER_TOKEN = process.env.MCP_BEARER_TOKEN;
-const PORT = parseInt(process.env.PORT ?? "3000", 10);
+const PORT = parseInt(process.env.PORT ?? "8082", 10);
 
 if (!MEMOS_TOKEN) {
   console.error("MEMOS_TOKEN environment variable is required.");

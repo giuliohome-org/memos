@@ -2,7 +2,9 @@
 
 Connect your [Memos](https://usememos.com) instance to Claude AI via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io).
 
-This MCP server runs as a long-running HTTP service (Streamable HTTP transport, bearer-gated). One process serves any number of Claude clients on the LAN — Claude Desktop, Claude Code, scripts — without per-session subprocess spawning.
+This MCP server runs as a long-running HTTP service (Streamable HTTP transport, bearer-gated) on the same host as Memos. It is meant to sit **behind the same reverse proxy** that already exposes Memos, so clients reach it at `http://<memos-hostname>/mcp` — same hostname, same port, same TLS as the Memos UI.
+
+One process serves any number of Claude clients on the LAN — Claude Desktop, Claude Code, scripts — without per-session subprocess spawning.
 
 ## Features
 
@@ -58,7 +60,7 @@ cat > ~/.memos-mcp.env <<'EOF'
 MEMOS_URL=http://localhost:8081
 MEMOS_TOKEN=memos_pat_xxxxxxxxxxxx
 MCP_BEARER_TOKEN=put_the_openssl_rand_output_here
-PORT=3000
+PORT=8082
 EOF
 chmod 600 ~/.memos-mcp.env
 
@@ -83,25 +85,74 @@ journalctl --user -u memos-mcp -f
 You should see:
 
 ```
-Memos MCP server listening on :3000 (POST /mcp, bearer-gated)
+Memos MCP server listening on :8082 (POST /mcp, bearer-gated)
 ```
 
-## 5. Smoke-test the endpoint
+## 5. Add the `/mcp` location to your reverse proxy
 
-From the same LAN:
+The Memos site config on your nginx (or Caddy/Traefik) host already proxies `/` to `<fedora-ip>:8081`. Add a sibling `location /mcp` that points to the MCP server on `<fedora-ip>:8082`. Example for nginx (`/etc/nginx/sites-available/memo` on the proxy host):
+
+```nginx
+server {
+    listen 80;
+    server_name memo.home;   # or memo.local, whichever you use
+
+    location /mcp {
+        proxy_pass http://192.168.1.202:8082;   # Fedora IP : MCP port
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        # Streamable HTTP MCP can keep the connection open for SSE responses;
+        # bump these so streams aren't cut by idle timeouts.
+        proxy_read_timeout 600s;
+        proxy_buffering off;
+    }
+
+    location / {
+        proxy_pass http://192.168.1.202:8081;   # existing memos backend
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+Apply:
 
 ```bash
-curl -sS http://<server-host>:3000/mcp \
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+## 6. Smoke-test the endpoint
+
+Direct against Fedora (bypasses the proxy — useful to isolate problems):
+
+```bash
+curl -sS http://192.168.1.202:8082/mcp \
   -H "Authorization: Bearer $MCP_BEARER_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
-Should return a JSON-RPC response listing 5 tools.
+Through the reverse proxy (the URL Claude will use):
 
-Without auth (or wrong token) → `401`.
+```bash
+curl -sS http://memo.home/mcp \
+  -H "Authorization: Bearer $MCP_BEARER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
 
-## 6. Register with Claude
+Both should return a JSON-RPC response listing 5 tools. Without auth (or wrong token) → `401`.
+
+## 7. Register with Claude
 
 ### Claude Code
 
@@ -109,14 +160,14 @@ Without auth (or wrong token) → `401`.
 claude mcp add memos --transport http \
   -H "Authorization: Bearer <MCP_BEARER_TOKEN>" \
   --scope user \
-  http://<server-host>:3000/mcp
+  http://memo.home/mcp
 ```
 
 ### Claude Desktop (Custom Connectors UI)
 
 Settings → Connectors → Add custom connector:
 
-- URL: `http://<server-host>:3000/mcp`
+- URL: `http://memo.home/mcp`
 - (No OAuth — use the bearer header form)
 
 > **Note:** Claude.ai web's custom connectors are routed via the Anthropic cloud and **cannot reach LAN-only addresses**. To use this server from claude.ai web you'd need a public-facing reverse proxy (e.g. Cloudflare Tunnel) — not covered here.
@@ -161,4 +212,4 @@ Once connected:
 | `MEMOS_URL` | `http://localhost:8081` | Base URL of your Memos instance |
 | `MEMOS_TOKEN` | (required) | Memos Personal Access Token |
 | `MCP_BEARER_TOKEN` | (required) | Bearer token gating the `/mcp` endpoint |
-| `PORT` | `3000` | TCP port to listen on |
+| `PORT` | `8082` | TCP port to listen on (default avoids conflict with Gitea on 3000) |
