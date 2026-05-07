@@ -26,11 +26,6 @@ const client = new MemosClient(MEMOS_URL, MEMOS_TOKEN);
 const VisibilityEnum = z.enum(["PRIVATE", "PROTECTED", "PUBLIC"]);
 const StateEnum = z.enum(["NORMAL", "ARCHIVED"]);
 
-const server = new McpServer({
-  name: "memos",
-  version: "1.0.0",
-});
-
 interface MemoData {
   name: string;
   content: string;
@@ -50,136 +45,144 @@ function formatMemo(memo: MemoData): string {
   return `${pin}**${id}**${vis}${time}\n${memo.content}${tagStr}`;
 }
 
-server.tool(
-  "list_memos",
-  "List and search memos. Returns memos matching the given filters. Use this to find recent memos, search by text, filter by tag, or browse your knowledge base.",
-  {
-    query: z.string().optional().describe("Search text to find in memo content (uses CEL filter: content.contains(\"text\"))"),
-    tag: z.string().optional().describe("Filter by tag. Matches any memos containing this tag."),
-    visibility: VisibilityEnum.optional().describe("Filter by visibility level"),
-    state: StateEnum.optional().default("NORMAL").describe("Memo state: NORMAL (active) or ARCHIVED"),
-    pinned: z.boolean().optional().describe("Filter by pinned status"),
-    pageSize: z.number().int().min(1).max(100).optional().default(10).describe("Page size (1-100, default 10)"),
-    orderBy: z.string().optional().default("display_time desc").describe("Sort order (e.g. 'display_time desc', 'create_time asc')"),
-  },
-  async (params) => {
-    const filterParts: string[] = [];
+function registerTools(server: McpServer): void {
+  server.tool(
+    "list_memos",
+    "List and search memos. Returns memos matching the given filters. Use this to find recent memos, search by text, filter by tag, or browse your knowledge base.",
+    {
+      query: z.string().optional().describe("Search text to find in memo content (uses CEL filter: content.contains(\"text\"))"),
+      tag: z.string().optional().describe("Filter by tag. Matches any memos containing this tag."),
+      visibility: VisibilityEnum.optional().describe("Filter by visibility level"),
+      state: StateEnum.optional().default("NORMAL").describe("Memo state: NORMAL (active) or ARCHIVED"),
+      pinned: z.boolean().optional().describe("Filter by pinned status"),
+      pageSize: z.number().int().min(1).max(100).optional().default(10).describe("Page size (1-100, default 10)"),
+      orderBy: z.string().optional().default("display_time desc").describe("Sort order (e.g. 'display_time desc', 'create_time asc')"),
+    },
+    async (params) => {
+      const filterParts: string[] = [];
 
-    if (params.query) {
-      filterParts.push(`content.contains("${params.query.replace(/"/g, '\\"')}")`);
-    }
-    if (params.tag) {
-      filterParts.push(`"${params.tag.replace(/"/g, '\\"')}" in tags`);
-    }
-    if (params.visibility) {
-      filterParts.push(`visibility == "${params.visibility}"`);
-    }
-    if (params.pinned !== undefined) {
-      filterParts.push(params.pinned ? "pinned" : "!pinned");
-    }
+      if (params.query) {
+        filterParts.push(`content.contains("${params.query.replace(/"/g, '\\"')}")`);
+      }
+      if (params.tag) {
+        filterParts.push(`"${params.tag.replace(/"/g, '\\"')}" in tags`);
+      }
+      if (params.visibility) {
+        filterParts.push(`visibility == "${params.visibility}"`);
+      }
+      if (params.pinned !== undefined) {
+        filterParts.push(params.pinned ? "pinned" : "!pinned");
+      }
 
-    const filter = filterParts.length > 0 ? filterParts.join(" && ") : undefined;
+      const filter = filterParts.length > 0 ? filterParts.join(" && ") : undefined;
 
-    const result = await client.listMemos({
-      pageSize: params.pageSize,
-      state: params.state,
-      orderBy: params.orderBy,
-      filter,
-    });
+      const result = await client.listMemos({
+        pageSize: params.pageSize,
+        state: params.state,
+        orderBy: params.orderBy,
+        filter,
+      });
 
-    if (!result.memos || result.memos.length === 0) {
+      if (!result.memos || result.memos.length === 0) {
+        return {
+          content: [{ type: "text", text: "No memos found." }],
+        };
+      }
+
+      const lines = result.memos.map((m) => formatMemo(m));
+      let responseText = lines.join("\n\n---\n\n");
+
+      if (result.nextPageToken) {
+        responseText += `\n\n---\n\nMore memos available. Use pageToken "${result.nextPageToken}" for the next page.`;
+      }
+
       return {
-        content: [{ type: "text", text: "No memos found." }],
+        content: [{ type: "text", text: responseText }],
       };
-    }
+    },
+  );
 
-    const lines = result.memos.map((m) => formatMemo(m));
-    let responseText = lines.join("\n\n---\n\n");
+  server.tool(
+    "get_memo",
+    "Get a specific memo by its ID. Use this to read the full content of a memo.",
+    {
+      id: z.string().describe("The memo ID (the part after 'memos/', e.g. 'mZ0Qf48KtPHSRxrNnDmZaj')"),
+    },
+    async ({ id }) => {
+      const memo = await client.getMemo(id);
 
-    if (result.nextPageToken) {
-      responseText += `\n\n---\n\nMore memos available. Use pageToken "${result.nextPageToken}" for the next page.`;
-    }
+      return {
+        content: [{ type: "text", text: formatMemo(memo) }],
+      };
+    },
+  );
 
-    return {
-      content: [{ type: "text", text: responseText }],
-    };
-  },
-);
+  server.tool(
+    "create_memo",
+    "Create a new memo. Contents are written in Markdown format. Tags are automatically extracted from #tag syntax in the content.",
+    {
+      content: z.string().describe("The memo content in Markdown format. Use #tagname to add tags (e.g. '#todo #work')"),
+      visibility: VisibilityEnum.optional().default("PRIVATE").describe("Visibility level. PRIVATE=only you, PROTECTED=logged-in users, PUBLIC=everyone"),
+      pinned: z.boolean().optional().default(false).describe("Whether to pin the memo"),
+    },
+    async ({ content, visibility, pinned }) => {
+      const memo = await client.createMemo({
+        content,
+        visibility,
+        pinned,
+      });
 
-server.tool(
-  "get_memo",
-  "Get a specific memo by its ID. Use this to read the full content of a memo.",
-  {
-    id: z.string().describe("The memo ID (the part after 'memos/', e.g. 'mZ0Qf48KtPHSRxrNnDmZaj')"),
-  },
-  async ({ id }) => {
-    const memo = await client.getMemo(id);
+      return {
+        content: [{ type: "text", text: `Memo created successfully:\n\n${formatMemo(memo)}` }],
+      };
+    },
+  );
 
-    return {
-      content: [{ type: "text", text: formatMemo(memo) }],
-    };
-  },
-);
+  server.tool(
+    "update_memo",
+    "Update an existing memo. Only specify the fields you want to change.",
+    {
+      id: z.string().describe("The memo ID to update"),
+      content: z.string().optional().describe("New Markdown content"),
+      visibility: VisibilityEnum.optional().describe("New visibility level"),
+      pinned: z.boolean().optional().describe("New pinned status"),
+      state: StateEnum.optional().describe("New state: NORMAL or ARCHIVED"),
+    },
+    async ({ id, content, visibility, pinned, state }) => {
+      const memo = await client.updateMemo(id, {
+        content,
+        visibility,
+        pinned,
+        state,
+      });
 
-server.tool(
-  "create_memo",
-  "Create a new memo. Contents are written in Markdown format. Tags are automatically extracted from #tag syntax in the content.",
-  {
-    content: z.string().describe("The memo content in Markdown format. Use #tagname to add tags (e.g. '#todo #work')"),
-    visibility: VisibilityEnum.optional().default("PRIVATE").describe("Visibility level. PRIVATE=only you, PROTECTED=logged-in users, PUBLIC=everyone"),
-    pinned: z.boolean().optional().default(false).describe("Whether to pin the memo"),
-  },
-  async ({ content, visibility, pinned }) => {
-    const memo = await client.createMemo({
-      content,
-      visibility,
-      pinned,
-    });
+      return {
+        content: [{ type: "text", text: `Memo updated successfully:\n\n${formatMemo(memo)}` }],
+      };
+    },
+  );
 
-    return {
-      content: [{ type: "text", text: `Memo created successfully:\n\n${formatMemo(memo)}` }],
-    };
-  },
-);
+  server.tool(
+    "delete_memo",
+    "Delete a memo permanently. For archiving instead, use update_memo with state: 'ARCHIVED'.",
+    {
+      id: z.string().describe("The memo ID to delete"),
+    },
+    async ({ id }) => {
+      await client.deleteMemo(id);
 
-server.tool(
-  "update_memo",
-  "Update an existing memo. Only specify the fields you want to change.",
-  {
-    id: z.string().describe("The memo ID to update"),
-    content: z.string().optional().describe("New Markdown content"),
-    visibility: VisibilityEnum.optional().describe("New visibility level"),
-    pinned: z.boolean().optional().describe("New pinned status"),
-    state: StateEnum.optional().describe("New state: NORMAL or ARCHIVED"),
-  },
-  async ({ id, content, visibility, pinned, state }) => {
-    const memo = await client.updateMemo(id, {
-      content,
-      visibility,
-      pinned,
-      state,
-    });
+      return {
+        content: [{ type: "text", text: `Memo "${id}" deleted successfully.` }],
+      };
+    },
+  );
+}
 
-    return {
-      content: [{ type: "text", text: `Memo updated successfully:\n\n${formatMemo(memo)}` }],
-    };
-  },
-);
-
-server.tool(
-  "delete_memo",
-  "Delete a memo permanently. For archiving instead, use update_memo with state: 'ARCHIVED'.",
-  {
-    id: z.string().describe("The memo ID to delete"),
-  },
-  async ({ id }) => {
-    await client.deleteMemo(id);
-
-    return {
-      content: [{ type: "text", text: `Memo "${id}" deleted successfully.` }],
-    };
-  },
-);
+function buildServer(): McpServer {
+  const server = new McpServer({ name: "memos", version: "1.0.0" });
+  registerTools(server);
+  return server;
+}
 
 function bearerOk(presented: string): boolean {
   const expected = `Bearer ${MCP_BEARER_TOKEN}`;
@@ -200,26 +203,44 @@ async function main(): Promise<void> {
     next();
   });
 
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined, // stateless
+  // Streamable HTTP in stateless mode: a fresh McpServer + transport per
+  // request keeps clients fully isolated and avoids request-id collisions.
+  app.post("/mcp", async (req, res) => {
+    try {
+      const server = buildServer();
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+      });
+      res.on("close", () => {
+        transport.close().catch(() => undefined);
+        server.close().catch(() => undefined);
+      });
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+    } catch (err) {
+      console.error("MCP POST handler error:", err);
+      if (!res.headersSent) {
+        res.status(500).json({
+          jsonrpc: "2.0",
+          error: { code: -32603, message: "Internal server error" },
+          id: null,
+        });
+      }
+    }
   });
-  await server.connect(transport);
 
-  app.post("/mcp", (req, res) => {
-    transport.handleRequest(req, res, req.body).catch((err) => {
-      console.error("MCP handler error:", err);
-      if (!res.headersSent) res.status(500).end();
-    });
-  });
-  app.get("/mcp", (req, res) => {
-    transport.handleRequest(req, res).catch((err) => {
-      console.error("MCP handler error:", err);
-      if (!res.headersSent) res.status(500).end();
+  // SSE GET is not meaningful in stateless mode (no persistent session
+  // for the server to push notifications to). Reject cleanly.
+  app.get("/mcp", (_req, res) => {
+    res.status(405).json({
+      jsonrpc: "2.0",
+      error: { code: -32000, message: "Method not allowed: stateless server doesn't accept GET /mcp" },
+      id: null,
     });
   });
 
   app.listen(PORT, () => {
-    console.error(`Memos MCP server listening on :${PORT} (POST /mcp, bearer-gated)`);
+    console.error(`Memos MCP server listening on :${PORT} (POST /mcp, bearer-gated, stateless)`);
   });
 }
 
