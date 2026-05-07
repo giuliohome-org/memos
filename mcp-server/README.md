@@ -191,8 +191,8 @@ journalctl --user -u memos-mcp -n 20
 |------|-------------|
 | `list_memos` | List and search memos with filters (text, tag, visibility, pinned) |
 | `get_memo` | Get full content of a specific memo by ID |
-| `create_memo` | Create a new memo (Markdown content, auto-extracts #tags) |
-| `update_memo` | Update memo fields (content, visibility, pinned, archive) |
+| `create_memo` | Create a new memo (Markdown content, auto-extracts `#tags`; optional `displayTime` to backdate or future-date) |
+| `update_memo` | Update memo fields (content, visibility, pinned, archive, `displayTime`) |
 | `delete_memo` | Permanently delete a memo |
 
 ## Usage Examples

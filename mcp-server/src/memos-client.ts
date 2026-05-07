@@ -86,6 +86,7 @@ export class MemosClient {
     content: string;
     visibility?: string;
     pinned?: boolean;
+    displayTime?: string;
     memoId?: string;
   }): Promise<Memo> {
     const body: Record<string, unknown> = {
@@ -95,10 +96,18 @@ export class MemosClient {
     };
 
     const query = params.memoId ? `?memoId=${encodeURIComponent(params.memoId)}` : "";
-    return this.request(`/api/v1/memos${query}`, {
+    const created = (await this.request(`/api/v1/memos${query}`, {
       method: "POST",
       body: JSON.stringify(body),
-    }) as Promise<Memo>;
+    })) as Memo;
+
+    // Memos sets displayTime = createTime on POST; if the caller wants a
+    // specific display date (past/future), we follow up with PATCH.
+    if (params.displayTime) {
+      const id = created.name.replace(/^memos\//, "");
+      return this.updateMemo(id, { displayTime: params.displayTime });
+    }
+    return created;
   }
 
   async updateMemo(id: string, params: {
@@ -106,6 +115,7 @@ export class MemosClient {
     visibility?: string;
     pinned?: boolean;
     state?: string;
+    displayTime?: string;
   }): Promise<Memo> {
     const body: Record<string, unknown> = {};
     const updateFields: string[] = [];
@@ -125,6 +135,10 @@ export class MemosClient {
     if (params.state !== undefined) {
       body.state = params.state;
       updateFields.push("state");
+    }
+    if (params.displayTime !== undefined) {
+      body.displayTime = params.displayTime;
+      updateFields.push("displayTime");
     }
 
     const updateMask = updateFields.join(",");

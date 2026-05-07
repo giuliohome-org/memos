@@ -119,17 +119,19 @@ function registerTools(server: McpServer): void {
 
   server.tool(
     "create_memo",
-    "Create a new memo. Contents are written in Markdown format. Tags are automatically extracted from #tag syntax in the content.",
+    "Create a new memo. Contents are written in Markdown format. Tags are automatically extracted from #tag syntax in the content. Optionally backdate or future-date the memo with displayTime (the Memos UI calls this 'change date').",
     {
       content: z.string().describe("The memo content in Markdown format. Use #tagname to add tags (e.g. '#todo #work')"),
       visibility: VisibilityEnum.optional().default("PRIVATE").describe("Visibility level. PRIVATE=only you, PROTECTED=logged-in users, PUBLIC=everyone"),
       pinned: z.boolean().optional().default(false).describe("Whether to pin the memo"),
+      displayTime: z.string().datetime({ offset: true }).optional().describe("Override the memo's date shown in the timeline. RFC3339 with timezone offset, e.g. '2026-05-14T09:30:00+02:00' for 14 May 2026 09:30 CEST. Omit to use the creation timestamp."),
     },
-    async ({ content, visibility, pinned }) => {
+    async ({ content, visibility, pinned, displayTime }) => {
       const memo = await client.createMemo({
         content,
         visibility,
         pinned,
+        displayTime,
       });
 
       return {
@@ -140,20 +142,22 @@ function registerTools(server: McpServer): void {
 
   server.tool(
     "update_memo",
-    "Update an existing memo. Only specify the fields you want to change.",
+    "Update an existing memo. Only specify the fields you want to change. Setting displayTime moves the memo to a different date in the timeline (same as 'change date' in the Memos UI).",
     {
       id: z.string().describe("The memo ID to update"),
       content: z.string().optional().describe("New Markdown content"),
       visibility: VisibilityEnum.optional().describe("New visibility level"),
       pinned: z.boolean().optional().describe("New pinned status"),
       state: StateEnum.optional().describe("New state: NORMAL or ARCHIVED"),
+      displayTime: z.string().datetime({ offset: true }).optional().describe("New display date/time. RFC3339 with timezone offset, e.g. '2026-05-14T09:30:00+02:00'."),
     },
-    async ({ id, content, visibility, pinned, state }) => {
+    async ({ id, content, visibility, pinned, state, displayTime }) => {
       const memo = await client.updateMemo(id, {
         content,
         visibility,
         pinned,
         state,
+        displayTime,
       });
 
       return {
