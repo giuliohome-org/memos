@@ -79,10 +79,9 @@ Memos is a privacy-first, self-hosted knowledge base that works seamlessly for p
 
 This fork ships an MCP server in [`mcp-server/`](./mcp-server/) that exposes your Memos instance to Anthropic's Claude — read, search, create, update, delete memos directly from a chat. Works across every Claude surface:
 
-- **Claude Code CLI** and **Claude Desktop** — bearer header
-- **claude.ai web** and the **Claude Android / iOS app** — same bearer, embedded in the URL path (no header field in the mobile/web connector UI)
+- **Claude Code CLI**, **Claude Desktop**, **claude.ai web**, and the **Claude Android / iOS app** — all four surfaces go through the same **OAuth 2.1 + PKCE** flow against a GitHub OAuth App, no bearer header to copy around
 
-A single long-running HTTP service per Memos instance serves all clients. Public exposure goes through your existing Cloudflare Tunnel; the bearer token is the only gate. See [`mcp-server/README.md`](./mcp-server/README.md) for setup, including the section on public exposure for cloud Claude clients.
+A single long-running HTTP service per Memos instance serves all clients. Public exposure goes through your existing Cloudflare Tunnel; the gate is the OAuth flow plus the server-side `OAUTH_ALLOWED_USERS` allowlist of GitHub logins. See [`mcp-server/README.md`](./mcp-server/README.md) for setup, including the section on public exposure for cloud Claude clients.
 
 ## Quick Start
 
