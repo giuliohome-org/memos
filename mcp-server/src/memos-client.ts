@@ -101,13 +101,13 @@ export class MemosClient {
       body: JSON.stringify(body),
     })) as Memo;
 
-    // Memos sets displayTime = createTime on POST; if the caller wants a
-    // specific display date (past/future), we follow up with PATCH.
-    if (params.displayTime) {
-      const id = created.name.replace(/^memos\//, "");
-      return this.updateMemo(id, { displayTime: params.displayTime });
-    }
-    return created;
+    // Memos ignores displayTime in POST and stores zero-epoch (shows as 1970)
+    // unless we PATCH it afterwards. Always set it to the user-specified value
+    // or "now" as a sensible default.
+    const id = created.name.replace(/^memos\//, "");
+    return this.updateMemo(id, {
+      displayTime: params.displayTime ?? new Date().toISOString(),
+    });
   }
 
   async updateMemo(id: string, params: {

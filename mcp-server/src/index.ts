@@ -9,6 +9,9 @@ const MEMOS_URL = process.env.MEMOS_URL || "http://localhost:8081";
 const MEMOS_TOKEN = process.env.MEMOS_TOKEN;
 const MCP_BEARER_TOKEN = process.env.MCP_BEARER_TOKEN;
 const PORT = parseInt(process.env.PORT ?? "8082", 10);
+const DISPLAY_TZ =
+  process.env.MEMOS_DISPLAY_TZ ||
+  Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 if (!MEMOS_TOKEN) {
   console.error("MEMOS_TOKEN environment variable is required.");
@@ -33,6 +36,21 @@ interface MemoData {
   pinned: boolean;
   tags: string[];
   createTime: string;
+  displayTime?: string;
+}
+
+function formatTimestamp(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  // sv-SE gives ISO-like "YYYY-MM-DD HH:mm" output, projected into DISPLAY_TZ.
+  return d.toLocaleString("sv-SE", {
+    timeZone: DISPLAY_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function formatMemo(memo: MemoData): string {
@@ -40,7 +58,8 @@ function formatMemo(memo: MemoData): string {
   const pin = memo.pinned ? "[PINNED] " : "";
   const tagStr = memo.tags.length ? ` #${memo.tags.join(" #")}` : "";
   const vis = memo.visibility === "PRIVATE" ? "" : ` (${memo.visibility})`;
-  const time = memo.createTime ? ` @ ${memo.createTime.slice(0, 16).replace("T", " ")}` : "";
+  const ts = memo.displayTime || memo.createTime;
+  const time = ts ? ` @ ${formatTimestamp(ts)}` : "";
 
   return `${pin}**${id}**${vis}${time}\n${memo.content}${tagStr}`;
 }
@@ -124,7 +143,7 @@ function registerTools(server: McpServer): void {
       content: z.string().describe("The memo content in Markdown format. Use #tagname to add tags (e.g. '#todo #work')"),
       visibility: VisibilityEnum.optional().default("PRIVATE").describe("Visibility level. PRIVATE=only you, PROTECTED=logged-in users, PUBLIC=everyone"),
       pinned: z.boolean().optional().default(false).describe("Whether to pin the memo"),
-      displayTime: z.string().datetime({ offset: true }).optional().describe("Override the memo's date shown in the timeline. RFC3339 with timezone offset, e.g. '2026-05-14T09:30:00+02:00' for 14 May 2026 09:30 CEST. Omit to use the creation timestamp."),
+      displayTime: z.string().datetime({ offset: true }).optional().describe("Override the memo's date shown in the timeline. RFC3339 with timezone offset, e.g. '2026-05-14T09:30:00+02:00' for 14 May 2026 09:30 CEST. Omit to use the current time."),
     },
     async ({ content, visibility, pinned, displayTime }) => {
       const memo = await client.createMemo({

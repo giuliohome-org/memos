@@ -13,6 +13,7 @@ One process serves any number of Claude clients on the LAN — Claude Desktop, C
 - **create** new memos with Markdown
 - **update** existing memos (content, visibility, pinned, archive)
 - **delete** memos permanently
+- **works with every Claude surface**: Claude Code CLI, Claude Desktop, **claude.ai web**, and the Claude Android/iOS app — the last two via the same public tunnel, with the bearer token embedded in the URL path (no header field needed)
 
 ## Prerequisites
 
@@ -227,7 +228,17 @@ claude mcp add memos --transport http \
   https://mcp-memo.giuliohome.com/mcp
 ```
 
-**Claude Desktop / claude.ai web / Android:** add as Custom Connector with URL `https://mcp-memo.giuliohome.com/mcp` and header `Authorization: Bearer <MCP_BEARER_TOKEN>`.
+**Claude Desktop:** Settings → Connectors → Add custom connector. URL `https://mcp-memo.giuliohome.com/mcp`, with `Authorization: Bearer <MCP_BEARER_TOKEN>` as a custom header.
+
+**claude.ai web / Android / iOS:** Settings → Connectors → Add custom connector. The web/mobile UI exposes only an URL field (no place for a header), so the server also accepts the bearer **embedded in the URL path**:
+
+```
+https://mcp-memo.giuliohome.com/mcp/<MCP_BEARER_TOKEN>
+```
+
+Same token, no other change required. A `?bearer=<token>` query string fallback also works.
+
+Once added, the Memos tools (`list_memos`, `get_memo`, `create_memo`, `update_memo`, `delete_memo`) appear in the connector's tool list and can be called from any conversation.
 
 ### 8.5 — Rollback
 
