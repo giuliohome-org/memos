@@ -143,7 +143,7 @@ function registerTools(server: McpServer): void {
       content: z.string().describe("The memo content in Markdown format. Use #tagname to add tags (e.g. '#todo #work')"),
       visibility: VisibilityEnum.optional().default("PRIVATE").describe("Visibility level. PRIVATE=only you, PROTECTED=logged-in users, PUBLIC=everyone"),
       pinned: z.boolean().optional().default(false).describe("Whether to pin the memo"),
-      displayTime: z.string().datetime({ offset: true }).optional().describe("Override the memo's date shown in the timeline. RFC3339 with timezone offset, e.g. '2026-05-14T09:30:00+02:00' for 14 May 2026 09:30 CEST. Omit to use the current time."),
+      displayTime: z.string().datetime({ offset: true }).optional().describe("ISO 8601 datetime with timezone offset, e.g. '2026-05-14T09:30:00+02:00' for 14 May 2026 09:30 CEST. Defaults to current time if omitted. Internally the wrapper issues a PATCH after creation because the Memos backend ignores displayTime on POST."),
     },
     async ({ content, visibility, pinned, displayTime }) => {
       const memo = await client.createMemo({

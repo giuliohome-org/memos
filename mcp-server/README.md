@@ -285,3 +285,4 @@ Once connected:
 | `MEMOS_TOKEN` | (required) | Memos Personal Access Token |
 | `MCP_BEARER_TOKEN` | (required) | Bearer token gating the `/mcp` endpoint |
 | `PORT` | `8082` | TCP port to listen on (default avoids conflict with Gitea on 3000) |
+| `MEMOS_DISPLAY_TZ` | system TZ | IANA timezone (e.g. `Europe/Rome`, `UTC`) used to format `displayTime` / `createTime` in `list_memos` and `get_memo` output. Set explicitly to make output reproducible across hosts. |
