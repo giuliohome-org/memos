@@ -170,7 +170,68 @@ Settings → Connectors → Add custom connector:
 - URL: `http://memo.home/mcp`
 - (No OAuth — use the bearer header form)
 
-> **Note:** Claude.ai web's custom connectors are routed via the Anthropic cloud and **cannot reach LAN-only addresses**. To use this server from claude.ai web you'd need a public-facing reverse proxy (e.g. Cloudflare Tunnel) — not covered here.
+> **Note:** these LAN URLs only work from inside your network. For claude.ai web, the Android app, or any client outside the LAN, see section 8 below.
+
+## 8. Public exposure via Cloudflare Tunnel
+
+Section 5–7 covers same-LAN clients (Claude Code on a workstation at home, Claude Desktop on the same Wi-Fi). To use this MCP server from claude.ai web, the Claude Android/iOS app, or any client outside your home network, expose it through your existing Cloudflare Tunnel.
+
+The exposure is gated **only** by `MCP_BEARER_TOKEN` — no Cloudflare Access policy in front. Bearer-only is sufficient for all current Claude clients (CLI, Desktop, web, mobile).
+
+### 8.1 — Add a public hostname to your tunnel
+
+In the Cloudflare Zero Trust dashboard:
+
+- Networks → Tunnels → your tunnel → Public Hostnames → **Add a public hostname**.
+- Subdomain: `mcp-memo` · Domain: `giuliohome.com` · Path: empty.
+- Service: HTTP · URL: `192.168.1.202:8082` (the LAN address of the host running this MCP server).
+- Save. Cloudflare auto-creates the CNAME `mcp-memo` → `<tunnel-id>.cfargotunnel.com`.
+
+Do **not** create a Cloudflare Access application for this hostname. The MCP server's bearer check is the gate.
+
+### 8.2 — Allow the MCP port from the cloudflared host
+
+If the cloudflared connector and the MCP server live on different machines (e.g. cloudflared on Debian `192.168.1.122`, MCP on Fedora `192.168.1.202`), make sure the MCP port is reachable across the LAN:
+
+```bash
+sudo firewall-cmd --list-all
+# if 8082/tcp is missing:
+sudo firewall-cmd --permanent --add-port=8082/tcp
+sudo firewall-cmd --reload
+```
+
+### 8.3 — Smoke test from outside
+
+From any network (4G, office, etc.):
+
+```bash
+curl -sS https://mcp-memo.giuliohome.com/mcp \
+  -H "Authorization: Bearer $MCP_BEARER_TOKEN" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+```
+
+Should return JSON-RPC with the 5 tools. Without/wrong token → `401`.
+
+On the MCP host, `journalctl --user -u memos-mcp -f` logs `POST /mcp ip=…` (and `401 /mcp ip=…` for rejected requests) — the IP comes from `X-Forwarded-For` set by cloudflared.
+
+### 8.4 — Register on cloud Claude clients
+
+**Claude Code CLI (anywhere):**
+
+```bash
+claude mcp add memos --transport http \
+  -H "Authorization: Bearer <MCP_BEARER_TOKEN>" \
+  --scope user \
+  https://mcp-memo.giuliohome.com/mcp
+```
+
+**Claude Desktop / claude.ai web / Android:** add as Custom Connector with URL `https://mcp-memo.giuliohome.com/mcp` and header `Authorization: Bearer <MCP_BEARER_TOKEN>`.
+
+### 8.5 — Rollback
+
+To take the public endpoint offline: dashboard → Public Hostnames → remove `mcp-memo.giuliohome.com`. DNS disappears immediately; LAN access via section 5–7 keeps working.
 
 ## Update procedure
 

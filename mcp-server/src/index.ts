@@ -197,10 +197,13 @@ function bearerOk(presented: string): boolean {
 
 async function main(): Promise<void> {
   const app = express();
+  // Honor X-Forwarded-For from cloudflared / nginx so req.ip is the real client.
+  app.set("trust proxy", true);
   app.use(express.json({ limit: "1mb" }));
 
   app.use("/mcp", (req, res, next) => {
     if (!bearerOk(req.header("authorization") ?? "")) {
+      console.error(`401 /mcp ip=${req.ip}`);
       res.status(401).end();
       return;
     }
@@ -211,6 +214,7 @@ async function main(): Promise<void> {
   // request keeps clients fully isolated and avoids request-id collisions.
   app.post("/mcp", async (req, res) => {
     try {
+      console.error(`POST /mcp ip=${req.ip}`);
       const server = buildServer();
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,
