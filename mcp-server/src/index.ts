@@ -233,10 +233,13 @@ async function main(): Promise<void> {
     const pathMatch = req.path.match(/^\/([^/]+)\/?$/);
     const pathToken = pathMatch ? pathMatch[1] : undefined;
     if (!bearerOk(req.header("authorization") ?? "", queryToken ?? pathToken)) {
-      console.error(
-        `401 /mcp ip=${req.ip} url=${req.originalUrl} ` +
-          `auth_hdr=${JSON.stringify(req.header("authorization") ?? null)}`
-      );
+      // Log only aggregate signal — never the URL or header value, which
+      // would persist failed bearer attempts in journalctl.
+      const via =
+        req.header("authorization") ? "header" :
+        queryToken ? "query" :
+        pathToken ? "path" : "none";
+      console.error(`401 /mcp ip=${req.ip} via=${via}`);
       res.status(401).end();
       return;
     }
