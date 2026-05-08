@@ -8,6 +8,11 @@ web/dist
 build/
 bin/
 server/router/frontend/dist/
+/memos
+
+# Local logs
+log/
+web/*.log
 
 
 # Plan/design documents
