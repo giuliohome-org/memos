@@ -188,10 +188,17 @@ function buildServer(): McpServer {
   return server;
 }
 
-function bearerOk(presented: string): boolean {
-  const expected = `Bearer ${MCP_BEARER_TOKEN}`;
-  const a = Buffer.from(presented);
-  const b = Buffer.from(expected);
+function bearerOk(headerVal: string, urlToken: string | undefined): boolean {
+  // Accept token via Authorization header (RFC 6750: scheme case-insensitive,
+  // allow >=1 whitespace, tolerate trailing whitespace) OR via URL — path
+  // segment /mcp/<token> or query ?bearer=<token>. The URL forms are needed
+  // for claude.ai web/Android custom connectors, whose UI exposes only an
+  // URL field with no place to set an Authorization header.
+  const m = headerVal.match(/^Bearer\s+(.+?)\s*$/i);
+  const candidate = (m ? m[1] : undefined) ?? urlToken;
+  if (!candidate) return false;
+  const a = Buffer.from(candidate);
+  const b = Buffer.from(MCP_BEARER_TOKEN!);
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
@@ -202,8 +209,15 @@ async function main(): Promise<void> {
   app.use(express.json({ limit: "1mb" }));
 
   app.use("/mcp", (req, res, next) => {
-    if (!bearerOk(req.header("authorization") ?? "")) {
-      console.error(`401 /mcp ip=${req.ip}`);
+    const queryToken = typeof req.query.bearer === "string" ? req.query.bearer : undefined;
+    // Path-based token: /mcp/<token> (req.path is relative to mount, so "/<token>")
+    const pathMatch = req.path.match(/^\/([^/]+)\/?$/);
+    const pathToken = pathMatch ? pathMatch[1] : undefined;
+    if (!bearerOk(req.header("authorization") ?? "", queryToken ?? pathToken)) {
+      console.error(
+        `401 /mcp ip=${req.ip} url=${req.originalUrl} ` +
+          `auth_hdr=${JSON.stringify(req.header("authorization") ?? null)}`
+      );
       res.status(401).end();
       return;
     }
@@ -212,7 +226,7 @@ async function main(): Promise<void> {
 
   // Streamable HTTP in stateless mode: a fresh McpServer + transport per
   // request keeps clients fully isolated and avoids request-id collisions.
-  app.post("/mcp", async (req, res) => {
+  app.post(["/mcp", "/mcp/:token"], async (req, res) => {
     try {
       console.error(`POST /mcp ip=${req.ip}`);
       const server = buildServer();
@@ -239,7 +253,7 @@ async function main(): Promise<void> {
 
   // SSE GET is not meaningful in stateless mode (no persistent session
   // for the server to push notifications to). Reject cleanly.
-  app.get("/mcp", (_req, res) => {
+  app.get(["/mcp", "/mcp/:token"], (_req, res) => {
     res.status(405).json({
       jsonrpc: "2.0",
       error: { code: -32000, message: "Method not allowed: stateless server doesn't accept GET /mcp" },
