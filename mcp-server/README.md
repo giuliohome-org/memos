@@ -4,10 +4,14 @@ Connect your [Memos](https://usememos.com) instance to Claude AI via the [Model 
 
 This MCP server runs as a long-running HTTP service (Streamable HTTP transport) on the same host as Memos. It is meant to sit **behind the same reverse proxy** that already exposes Memos, so clients reach it at `http://<memos-hostname>/mcp` — same hostname, same port, same TLS as the Memos UI.
 
-Two auth modes are supported and can coexist:
-
-- **Static bearer** — a token of your choosing, presented in the `Authorization: Bearer …` header (or, for clients that only expose a URL field, in the URL path `/mcp/<token>` or query `?bearer=<token>`).
-- **OAuth via GitHub** — Claude.ai's custom-connector advanced settings hold the GitHub OAuth Client ID + Client Secret and run the OAuth 2.1 + PKCE flow themselves; this server only advertises the IdP via the two well-known metadata endpoints and validates the resulting bearer by calling `https://api.github.com/user` (5-min cache, SHA-256-hashed token key).
+The `/mcp` endpoint is gated by **OAuth via GitHub**: Claude.ai's
+custom-connector advanced settings hold the GitHub OAuth Client ID +
+Client Secret and run the OAuth 2.1 + PKCE flow themselves; this server
+only advertises the IdP via the two well-known metadata endpoints
+([RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) +
+[RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414)) and validates
+the resulting bearer by calling `https://api.github.com/user` (5-min
+cache, SHA-256-hashed token key).
 
 One process serves any number of Claude clients on the LAN — Claude Desktop, Claude Code, scripts — without per-session subprocess spawning.
 
@@ -18,16 +22,14 @@ One process serves any number of Claude clients on the LAN — Claude Desktop, C
 - **create** new memos with Markdown
 - **update** existing memos (content, visibility, pinned, archive)
 - **delete** memos permanently
-- **works with every Claude surface**: Claude Code CLI, Claude Desktop, **claude.ai web**, and the Claude Android/iOS app — the last two via the same public tunnel, with the bearer token embedded in the URL path (no header field needed)
+- **works with every Claude surface**: Claude Code CLI, Claude Desktop, **claude.ai web**, and the Claude Android/iOS app — all four go through the same OAuth flow against your GitHub OAuth App
 
 ## Prerequisites
 
 - Node.js 18+
 - A running Memos instance reachable from this server (e.g. `http://localhost:8081` if same host)
 - A Memos Personal Access Token (PAT)
-- **At least one** auth mode for the `/mcp` endpoint itself:
-  - a static bearer token of your choosing (`MCP_BEARER_TOKEN`), and/or
-  - a GitHub OAuth App (`OAUTH_PROVIDER=github` + the env vars in section 2b)
+- A GitHub OAuth App (`OAUTH_PROVIDER=github` + the env vars in section 2)
 
 ## 1. Get a Memos PAT
 
@@ -35,24 +37,10 @@ One process serves any number of Claude clients on the LAN — Claude Desktop, C
 2. Settings → Personal Access Tokens → create a new token (e.g. "Claude MCP")
 3. Copy it — looks like `memos_pat_xxxxxxxxxxxx`
 
-## 2a. Generate an MCP bearer token (static-bearer mode)
+## 2. Register a GitHub OAuth App
 
-This is what Claude (and only Claude) will present to call this MCP server.
-You can skip this step if you only want OAuth (see 2b).
-
-```bash
-openssl rand -hex 32
-```
-
-Save it somewhere safe (password manager).
-
-## 2b. Register a GitHub OAuth App (OAuth mode, recommended for claude.ai web)
-
-The static token is convenient for `curl` and Claude Code but leaks via
-browser history and server logs, has no notion of identity, and rotating
-it means re-pasting the URL into every connector. Claude.ai's custom-
-connector advanced settings accept an OAuth **Client ID + Client Secret**
-([only those two
+Claude.ai's custom-connector advanced settings accept an OAuth
+**Client ID + Client Secret** ([only those two
 fields](https://github.com/anthropics/claude-ai-mcp/issues/112)) so it can
 run the full OAuth 2.1 + PKCE flow itself, and our server only validates
 the resulting bearer.
@@ -70,8 +58,7 @@ the resulting bearer.
    an empty value refuses to start, so a misconfiguration cannot silently
    let any GitHub user in.
 3. The GitHub OAuth App's Client ID + Secret are pasted into Claude.ai's
-   connector advanced settings (section 7 / 8) — **not** stored on this
-   server.
+   connector advanced settings (section 7) — **not** stored on this server.
 
 ## 3. Install & build
 
@@ -92,16 +79,11 @@ This keeps the server running and restarts it on failure. The provided unit and 
 sudo loginctl enable-linger "$USER"
 
 # Tokens go in a 0600 env file (NOT in the unit, NOT in shell history).
-# At least one of MCP_BEARER_TOKEN or OAUTH_PROVIDER must be set.
 cat > ~/.memos-mcp.env <<'EOF'
 MEMOS_URL=http://localhost:8081
 MEMOS_TOKEN=memos_pat_xxxxxxxxxxxx
 PORT=8082
 
-# Static-bearer mode (optional — pick this AND/OR OAuth below):
-MCP_BEARER_TOKEN=put_the_openssl_rand_output_here
-
-# OAuth mode (optional — recommended for claude.ai web):
 OAUTH_PROVIDER=github
 OAUTH_PUBLIC_BASE_URL=https://mcp-memo.giuliohome.com
 OAUTH_ALLOWED_USERS=giuliohome
@@ -126,10 +108,10 @@ Tail the logs with:
 journalctl --user -u memos-mcp -f
 ```
 
-You should see (modes depend on which env vars you set):
+You should see:
 
 ```
-Memos MCP server listening on :8082 (POST /mcp, static-bearer + oauth=github(giuliohome), stateless)
+Memos MCP server listening on :8082 (POST /mcp, oauth=github(giuliohome), stateless)
 ```
 
 ## 5. Add the `/mcp` location to your reverse proxy
@@ -168,6 +150,10 @@ server {
 }
 ```
 
+If you also want the OAuth discovery endpoints to work over the LAN
+proxy (not strictly needed — Claude.ai uses the public Cloudflare tunnel
+hostname), add `location /.well-known/` pointing at the same backend.
+
 Apply:
 
 ```bash
@@ -176,51 +162,71 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ## 6. Smoke-test the endpoint
 
-Direct against Fedora (bypasses the proxy — useful to isolate problems):
+The OAuth discovery endpoints don't need authentication — they should
+return JSON straight away:
 
 ```bash
-curl -sS http://192.168.1.202:8082/mcp \
-  -H "Authorization: Bearer $MCP_BEARER_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+curl -sS https://mcp-memo.giuliohome.com/.well-known/oauth-protected-resource | jq
+curl -sS https://mcp-memo.giuliohome.com/.well-known/oauth-authorization-server | jq
 ```
 
-Through the reverse proxy (the URL Claude will use):
+An unauthenticated `POST /mcp` must return `401` with the
+`WWW-Authenticate` header that triggers Claude.ai's OAuth flow:
 
 ```bash
-curl -sS http://memo.home/mcp \
-  -H "Authorization: Bearer $MCP_BEARER_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+curl -i -X POST https://mcp-memo.giuliohome.com/mcp \
+     -H "Content-Type: application/json" \
+     -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+# expected: HTTP/2 401
+#   www-authenticate: Bearer realm="MCP", resource_metadata="…/.well-known/oauth-protected-resource"
 ```
 
-Both should return a JSON-RPC response listing 5 tools. Without auth (or wrong token) → `401`.
+To smoke-test the authenticated path without going through Claude.ai,
+you can mint a `read:user` token at GitHub → Settings → Developer settings
+→ Personal access tokens (fine-grained) and reuse it as a bearer:
+
+```bash
+curl -sS https://mcp-memo.giuliohome.com/mcp \
+  -H "Authorization: Bearer $GH_PAT_READUSER" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+# expected: JSON-RPC body listing the 5 tools (and a /mcp auth ok user=… line in journalctl)
+```
 
 ## 7. Register with Claude
 
-### Claude Code
-
-```bash
-claude mcp add memos --transport http \
-  -H "Authorization: Bearer <MCP_BEARER_TOKEN>" \
-  --scope user \
-  http://memo.home/mcp
-```
-
-### Claude Desktop (Custom Connectors UI)
+### claude.ai web / Android / iOS
 
 Settings → Connectors → Add custom connector:
 
-- URL: `http://memo.home/mcp`
-- (No OAuth — use the bearer header form)
+- URL: `https://mcp-memo.giuliohome.com/mcp`
+- Open *Advanced settings* and paste the GitHub OAuth App's Client ID +
+  Client Secret (from section 2).
 
-> **Note:** these LAN URLs only work from inside your network. For claude.ai web, the Android app, or any client outside the LAN, see section 8 below.
+The first request returns `401` with `WWW-Authenticate: … resource_metadata=…`;
+Claude.ai discovers the GitHub authorize/token URLs from our well-known
+metadata, walks you through `github.com/login/oauth/authorize`, and
+forwards the resulting bearer on every subsequent `/mcp` call. The server
+validates each request by calling `https://api.github.com/user`.
+
+### Claude Desktop / Claude Code
+
+Same connector URL, same OAuth flow. Claude Desktop and Claude Code both
+implement OAuth-aware MCP clients and will discover the metadata
+endpoints automatically when they hit the 401.
+
+Once added, the Memos tools (`list_memos`, `get_memo`, `create_memo`, `update_memo`, `delete_memo`) appear in the connector's tool list and can be called from any conversation.
 
 ## 8. Public exposure via Cloudflare Tunnel
 
-Section 5–7 covers same-LAN clients (Claude Code on a workstation at home, Claude Desktop on the same Wi-Fi). To use this MCP server from claude.ai web, the Claude Android/iOS app, or any client outside your home network, expose it through your existing Cloudflare Tunnel.
+To use this MCP server from claude.ai web, the Claude Android/iOS app, or
+any client outside your home network, expose it through your existing
+Cloudflare Tunnel.
 
-The exposure is gated **only** by `MCP_BEARER_TOKEN` — no Cloudflare Access policy in front. Bearer-only is sufficient for all current Claude clients (CLI, Desktop, web, mobile).
+The exposure is gated by the **OAuth flow** — no Cloudflare Access policy
+in front. The MCP server itself enforces the `OAUTH_ALLOWED_USERS`
+allowlist on every request.
 
 ### 8.1 — Add a public hostname to your tunnel
 
@@ -231,7 +237,7 @@ In the Cloudflare Zero Trust dashboard:
 - Service: HTTP · URL: `192.168.1.202:8082` (the LAN address of the host running this MCP server).
 - Save. Cloudflare auto-creates the CNAME `mcp-memo` → `<tunnel-id>.cfargotunnel.com`.
 
-Do **not** create a Cloudflare Access application for this hostname. The MCP server's bearer check is the gate.
+Do **not** create a Cloudflare Access application for this hostname — the OAuth check is the gate.
 
 ### 8.2 — Allow the MCP port from the cloudflared host
 
@@ -244,59 +250,9 @@ sudo firewall-cmd --permanent --add-port=8082/tcp
 sudo firewall-cmd --reload
 ```
 
-### 8.3 — Smoke test from outside
+### 8.3 — Take it offline
 
-From any network (4G, office, etc.):
-
-```bash
-curl -sS https://mcp-memo.giuliohome.com/mcp \
-  -H "Authorization: Bearer $MCP_BEARER_TOKEN" \
-  -H "Content-Type: application/json" \
-  -H "Accept: application/json, text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-```
-
-Should return JSON-RPC with the 5 tools. Without/wrong token → `401`.
-
-On the MCP host, `journalctl --user -u memos-mcp -f` logs `POST /mcp ip=…` (and `401 /mcp ip=…` for rejected requests) — the IP comes from `X-Forwarded-For` set by cloudflared.
-
-### 8.4 — Register on cloud Claude clients
-
-**Claude Code CLI (anywhere):**
-
-```bash
-claude mcp add memos --transport http \
-  -H "Authorization: Bearer <MCP_BEARER_TOKEN>" \
-  --scope user \
-  https://mcp-memo.giuliohome.com/mcp
-```
-
-**Claude Desktop:** Settings → Connectors → Add custom connector. URL `https://mcp-memo.giuliohome.com/mcp`, with `Authorization: Bearer <MCP_BEARER_TOKEN>` as a custom header.
-
-**claude.ai web / Android / iOS — OAuth (recommended):** Settings →
-Connectors → Add custom connector. URL: `https://mcp-memo.giuliohome.com/mcp`,
-then *Advanced settings* → paste the GitHub OAuth App's Client ID + Client
-Secret (from section 2b). The first request returns `401` with
-`WWW-Authenticate: … resource_metadata=…`; Claude.ai walks you through
-`github.com/login/oauth/authorize` and forwards the resulting bearer on
-every subsequent call.
-
-**claude.ai web / Android / iOS — static bearer (fallback):** if you
-prefer the static-token route (or OAuth isn't configured), the web/mobile
-UI exposes only a URL field, so the server also accepts the bearer
-embedded in the URL path:
-
-```
-https://mcp-memo.giuliohome.com/mcp/<MCP_BEARER_TOKEN>
-```
-
-Same token, no other change required. A `?bearer=<token>` query string fallback also works.
-
-Once added, the Memos tools (`list_memos`, `get_memo`, `create_memo`, `update_memo`, `delete_memo`) appear in the connector's tool list and can be called from any conversation.
-
-### 8.5 — Rollback
-
-To take the public endpoint offline: dashboard → Public Hostnames → remove `mcp-memo.giuliohome.com`. DNS disappears immediately; LAN access via section 5–7 keeps working.
+To take the public endpoint offline: dashboard → Public Hostnames → remove `mcp-memo.giuliohome.com`. DNS disappears immediately.
 
 ## Update procedure
 
@@ -337,11 +293,8 @@ Once connected:
 |----------|---------|-------------|
 | `MEMOS_URL` | `http://localhost:8081` | Base URL of your Memos instance |
 | `MEMOS_TOKEN` | (required) | Memos Personal Access Token |
-| `MCP_BEARER_TOKEN` | optional† | Static bearer accepted as `Authorization: Bearer …`, `/mcp/<token>`, or `?bearer=<token>` |
-| `OAUTH_PROVIDER` | optional† | `github` (Auth0 reserved for future) — enables OAuth bearer validation |
-| `OAUTH_PUBLIC_BASE_URL` | with `OAUTH_PROVIDER` | Public base URL of this server, e.g. `https://mcp-memo.giuliohome.com` |
-| `OAUTH_ALLOWED_USERS` | with `OAUTH_PROVIDER` | Comma-separated GitHub logins; **must list at least one user** — empty refuses to start |
+| `OAUTH_PROVIDER` | (required) | `github` (Auth0 reserved for future) |
+| `OAUTH_PUBLIC_BASE_URL` | (required) | Public base URL of this server, e.g. `https://mcp-memo.giuliohome.com` |
+| `OAUTH_ALLOWED_USERS` | (required) | Comma-separated GitHub logins; **must list at least one user** — empty refuses to start |
 | `PORT` | `8082` | TCP port to listen on (default avoids conflict with Gitea on 3000) |
 | `MEMOS_DISPLAY_TZ` | system TZ | IANA timezone (e.g. `Europe/Rome`, `UTC`) used to format `displayTime` / `createTime` in `list_memos` and `get_memo` output. Set explicitly to make output reproducible across hosts. |
-
-† At least one of `MCP_BEARER_TOKEN` or `OAUTH_PROVIDER` must be set; otherwise the server refuses to start.
