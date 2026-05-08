@@ -4,6 +4,16 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod/v3";
 import { MemosClient } from "./memos-client.js";
+import {
+  AuthError,
+  authorizationServerMetadata,
+  configFromEnv as oauthConfigFromEnv,
+  OAuthState,
+  protectedResourceMetadata,
+  validateBearer,
+  wwwAuthenticateHeader,
+  type OAuthConfig,
+} from "./oauth.js";
 
 const MEMOS_URL = process.env.MEMOS_URL || "http://localhost:8081";
 const MEMOS_TOKEN = process.env.MEMOS_TOKEN;
@@ -18,9 +28,19 @@ if (!MEMOS_TOKEN) {
   console.error("Get one from Memos Settings > Personal Access Tokens.");
   process.exit(1);
 }
-if (!MCP_BEARER_TOKEN) {
-  console.error("MCP_BEARER_TOKEN environment variable is required.");
-  console.error("Generate one with: openssl rand -hex 32");
+
+let oauthConfig: OAuthConfig | null;
+try {
+  oauthConfig = oauthConfigFromEnv();
+} catch (e) {
+  console.error(`OAuth config error: ${(e as Error).message}`);
+  process.exit(1);
+}
+const oauthState = new OAuthState();
+
+if (!MCP_BEARER_TOKEN && !oauthConfig) {
+  console.error("At least one auth method must be configured: MCP_BEARER_TOKEN, or");
+  console.error("OAUTH_PROVIDER (with OAUTH_PUBLIC_BASE_URL + OAUTH_ALLOWED_USERS).");
   process.exit(1);
 }
 
@@ -207,18 +227,62 @@ function buildServer(): McpServer {
   return server;
 }
 
-function bearerOk(headerVal: string, urlToken: string | undefined): boolean {
-  // Accept token via Authorization header (RFC 6750: scheme case-insensitive,
-  // allow >=1 whitespace, tolerate trailing whitespace) OR via URL — path
-  // segment /mcp/<token> or query ?bearer=<token>. The URL forms are needed
-  // for claude.ai web/Android custom connectors, whose UI exposes only an
-  // URL field with no place to set an Authorization header.
-  const m = headerVal.match(/^Bearer\s+(.+?)\s*$/i);
-  const candidate = (m ? m[1] : undefined) ?? urlToken;
-  if (!candidate) return false;
+function staticBearerOk(candidate: string | undefined): boolean {
+  if (!candidate || !MCP_BEARER_TOKEN) return false;
   const a = Buffer.from(candidate);
-  const b = Buffer.from(MCP_BEARER_TOKEN!);
+  const b = Buffer.from(MCP_BEARER_TOKEN);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function extractHeaderBearer(headerVal: string): string | undefined {
+  // RFC 6750: scheme case-insensitive, >=1 whitespace, tolerate trailing whitespace.
+  const m = headerVal.match(/^Bearer\s+(.+?)\s*$/i);
+  return m ? m[1] : undefined;
+}
+
+type AuthOutcome =
+  | { ok: true; via: "header-static" | "header-oauth" | "url" }
+  | { ok: false; status: number; wwwAuthenticate?: string };
+
+async function authenticate(
+  headerVal: string,
+  urlToken: string | undefined,
+): Promise<AuthOutcome> {
+  const headerToken = extractHeaderBearer(headerVal);
+
+  // Static bearer wins (cheap comparison) — works for both header and URL forms.
+  if (staticBearerOk(headerToken) || staticBearerOk(urlToken)) {
+    return { ok: true, via: headerToken ? "header-static" : "url" };
+  }
+
+  // OAuth path applies only to header tokens (URL/query bearer forms remain
+  // static-only — OAuth tokens are not safe to put in a URL).
+  if (oauthConfig && headerToken) {
+    try {
+      const user = await validateBearer(headerToken, oauthConfig, oauthState);
+      console.error(`/mcp auth ok via=oauth user=${user.login}`);
+      return { ok: true, via: "header-oauth" };
+    } catch (e) {
+      if (e instanceof AuthError) {
+        console.error(`/mcp auth ${e.kind}: ${e.message}`);
+        if (e.kind === "forbidden") {
+          return { ok: false, status: 403 };
+        }
+      } else {
+        console.error(`/mcp auth unexpected error: ${(e as Error).message}`);
+      }
+      // fall through to 401 with WWW-Authenticate
+    }
+  }
+
+  if (oauthConfig) {
+    return {
+      ok: false,
+      status: 401,
+      wwwAuthenticate: wwwAuthenticateHeader(oauthConfig),
+    };
+  }
+  return { ok: false, status: 401 };
 }
 
 async function main(): Promise<void> {
@@ -227,20 +291,38 @@ async function main(): Promise<void> {
   app.set("trust proxy", true);
   app.use(express.json({ limit: "1mb" }));
 
-  app.use("/mcp", (req, res, next) => {
+  // OAuth discovery — must be reachable unauthenticated, so register before /mcp guard.
+  if (oauthConfig) {
+    const cfg = oauthConfig;
+    app.get("/.well-known/oauth-protected-resource", (_req, res) => {
+      res.json(protectedResourceMetadata(cfg));
+    });
+    app.get("/.well-known/oauth-authorization-server", (_req, res) => {
+      res.json(authorizationServerMetadata(cfg));
+    });
+  }
+
+  app.use("/mcp", async (req, res, next) => {
     const queryToken = typeof req.query.bearer === "string" ? req.query.bearer : undefined;
     // Path-based token: /mcp/<token> (req.path is relative to mount, so "/<token>")
     const pathMatch = req.path.match(/^\/([^/]+)\/?$/);
     const pathToken = pathMatch ? pathMatch[1] : undefined;
-    if (!bearerOk(req.header("authorization") ?? "", queryToken ?? pathToken)) {
+    const outcome = await authenticate(
+      req.header("authorization") ?? "",
+      queryToken ?? pathToken,
+    );
+    if (!outcome.ok) {
       // Log only aggregate signal — never the URL or header value, which
       // would persist failed bearer attempts in journalctl.
       const via =
         req.header("authorization") ? "header" :
         queryToken ? "query" :
         pathToken ? "path" : "none";
-      console.error(`401 /mcp ip=${req.ip} via=${via}`);
-      res.status(401).end();
+      console.error(`${outcome.status} /mcp ip=${req.ip} via=${via}`);
+      if (outcome.wwwAuthenticate) {
+        res.setHeader("WWW-Authenticate", outcome.wwwAuthenticate);
+      }
+      res.status(outcome.status).end();
       return;
     }
     next();
@@ -284,7 +366,10 @@ async function main(): Promise<void> {
   });
 
   app.listen(PORT, () => {
-    console.error(`Memos MCP server listening on :${PORT} (POST /mcp, bearer-gated, stateless)`);
+    const modes: string[] = [];
+    if (MCP_BEARER_TOKEN) modes.push("static-bearer");
+    if (oauthConfig) modes.push(`oauth=${oauthConfig.provider}(${oauthConfig.allowedUsers.join(",")})`);
+    console.error(`Memos MCP server listening on :${PORT} (POST /mcp, ${modes.join(" + ")}, stateless)`);
   });
 }
 
