@@ -1,0 +1,22 @@
+[Unit]
+Description=Memos MCP Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=giulio
+Group=giulio
+WorkingDirectory=/home/giulio/react/memos/mcp-server
+ExecStart=/usr/bin/node /home/giulio/react/memos/mcp-server/dist/index.js
+EnvironmentFile=/etc/memos-mcp/env
+LoadCredentialEncrypted=MEMOS_TOKEN:/etc/memos-mcp/credentials/MEMOS_TOKEN.cred
+LoadCredentialEncrypted=GITHUB_OAUTH_CLIENT_SECRET:/etc/memos-mcp/credentials/GITHUB_OAUTH_CLIENT_SECRET.cred
+LoadCredentialEncrypted=OAUTH_REFRESH_TOKEN_SECRET:/etc/memos-mcp/credentials/OAUTH_REFRESH_TOKEN_SECRET.cred
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

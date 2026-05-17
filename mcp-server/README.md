@@ -1,19 +1,17 @@
 # Memos MCP Server
 
-Connect your [Memos](https://usememos.com) instance to Claude AI via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io).
+Connect your [Memos](https://usememos.com) instance to Claude AI and ChatGPT via the [Model Context Protocol (MCP)](https://modelcontextprotocol.io).
 
 This MCP server runs as a long-running HTTP service (Streamable HTTP transport) on the same host as Memos. It is meant to sit **behind the same reverse proxy** that already exposes Memos, so clients reach it at `http://<memos-hostname>/mcp` — same hostname, same port, same TLS as the Memos UI.
 
-The `/mcp` endpoint is gated by **OAuth via GitHub**: Claude.ai's
-custom-connector advanced settings hold the GitHub OAuth Client ID +
-Client Secret and run the OAuth 2.1 + PKCE flow themselves; this server
-only advertises the IdP via the two well-known metadata endpoints
-([RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728) +
-[RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414)) and validates
-the resulting bearer by calling `https://api.github.com/user` (5-min
-cache, SHA-256-hashed token key).
+The `/mcp` endpoint is gated by **OAuth via GitHub**. This server acts as
+a small OAuth broker: MCP clients discover this server's authorization,
+token, and dynamic client registration endpoints, while the server
+performs the upstream GitHub OAuth exchange and validates each resulting
+bearer by calling `https://api.github.com/user` (5-min cache,
+SHA-256-hashed token key).
 
-One process serves any number of Claude clients on the LAN — Claude Desktop, Claude Code, scripts — without per-session subprocess spawning.
+One process serves any number of MCP clients on the LAN — Claude Desktop, Claude Code, ChatGPT, scripts — without per-session subprocess spawning.
 
 ## Features
 
@@ -22,7 +20,7 @@ One process serves any number of Claude clients on the LAN — Claude Desktop, C
 - **create** new memos with Markdown
 - **update** existing memos (content, visibility, pinned, archive)
 - **delete** memos permanently
-- **works with every Claude surface**: Claude Code CLI, Claude Desktop, **claude.ai web**, and the Claude Android/iOS app — all four go through the same OAuth flow against your GitHub OAuth App
+- **works with Claude and ChatGPT**: Claude Code CLI, Claude Desktop, **claude.ai web**, Claude Android/iOS, and ChatGPT Developer Mode Actions can all go through GitHub OAuth
 
 ## Prerequisites
 
@@ -39,26 +37,30 @@ One process serves any number of Claude clients on the LAN — Claude Desktop, C
 
 ## 2. Register a GitHub OAuth App
 
-Claude.ai's custom-connector advanced settings accept an OAuth
-**Client ID + Client Secret** ([only those two
-fields](https://github.com/anthropics/claude-ai-mcp/issues/112)) so it can
-run the full OAuth 2.1 + PKCE flow itself, and our server only validates
-the resulting bearer.
+Register one GitHub OAuth App for the broker. Claude and ChatGPT use
+Dynamic Client Registration (DCR) against this MCP server; they do not
+need to know the real GitHub Client Secret.
 
 1. GitHub → *Settings* → *Developer settings* → *OAuth Apps* → *New OAuth App*:
-   - *Authorization callback URL*: `https://claude.ai/api/mcp/auth_callback`
+   - *Homepage URL*: `https://mcp-memo.giuliohome.com`
+   - *Authorization callback URL*: `https://mcp-memo.giuliohome.com/oauth/github/callback`
    - Copy the *Client ID* and generate a *Client Secret*.
-2. Set on this server (in `~/.memos-mcp.env`, see section 4):
+2. Set on this server (see section 4):
    ```
+   MEMOS_TOKEN=memos_pat_xxxxxxxxxxxx
    OAUTH_PROVIDER=github
    OAUTH_PUBLIC_BASE_URL=https://mcp-memo.giuliohome.com
    OAUTH_ALLOWED_USERS=giuliohome
+   GITHUB_OAUTH_CLIENT_ID=Ov23...
+   GITHUB_OAUTH_CLIENT_SECRET=...
    ```
    `OAUTH_ALLOWED_USERS` is **required** — comma-separated GitHub logins;
    an empty value refuses to start, so a misconfiguration cannot silently
    let any GitHub user in.
-3. The GitHub OAuth App's Client ID + Secret are pasted into Claude.ai's
-   connector advanced settings (section 7) — **not** stored on this server.
+3. For production, load `MEMOS_TOKEN`, `GITHUB_OAUTH_CLIENT_SECRET`, and
+   `OAUTH_REFRESH_TOKEN_SECRET` via systemd encrypted credentials rather
+   than plaintext env vars. Rotate the GitHub Client Secret after setup if
+   it was pasted into test UIs during troubleshooting.
 
 ## 3. Install & build
 
@@ -70,49 +72,63 @@ npm run build
 
 `dist/index.js` is the entrypoint.
 
-## 4. Run as a daemon (systemd user unit)
+## 4. Run as a daemon (systemd + encrypted credentials)
 
-This keeps the server running and restarts it on failure. The provided unit and env-file template let you avoid putting tokens on the command line.
+This keeps the server running and restarts it on failure. The preferred
+deployment is a system-level unit that runs Node as user `giulio`, with
+secrets supplied through `LoadCredentialEncrypted`. Non-secret settings
+live in `/etc/memos-mcp/env`.
 
 ```bash
-# One-time: enable user services to run after logout
-sudo loginctl enable-linger "$USER"
+# Build first.
+cd ~/react/memos/mcp-server
+npm run build
 
-# Tokens go in a 0600 env file (NOT in the unit, NOT in shell history).
-cat > ~/.memos-mcp.env <<'EOF'
+# Non-secret environment.
+sudo install -d -m 0755 /etc/memos-mcp
+sudo tee /etc/memos-mcp/env >/dev/null <<'EOF'
 MEMOS_URL=http://localhost:8081
-MEMOS_TOKEN=memos_pat_xxxxxxxxxxxx
 PORT=8082
 
 OAUTH_PROVIDER=github
 OAUTH_PUBLIC_BASE_URL=https://mcp-memo.giuliohome.com
 OAUTH_ALLOWED_USERS=giuliohome
+GITHUB_OAUTH_CLIENT_ID=Ov23...
 EOF
-chmod 600 ~/.memos-mcp.env
+sudo chmod 0644 /etc/memos-mcp/env
 
-# Install the unit
-mkdir -p ~/.config/systemd/user
-cp systemd/memos-mcp.service ~/.config/systemd/user/
+# Encrypted credentials. Run these from a shell where the three variables
+# are set, or replace "$..." with the values while avoiding shell history.
+sudo install -d -m 0700 /etc/memos-mcp/credentials
+printf "%s" "$MEMOS_TOKEN" | sudo systemd-creds encrypt --name=MEMOS_TOKEN - /etc/memos-mcp/credentials/MEMOS_TOKEN.cred
+printf "%s" "$GITHUB_OAUTH_CLIENT_SECRET" | sudo systemd-creds encrypt --name=GITHUB_OAUTH_CLIENT_SECRET - /etc/memos-mcp/credentials/GITHUB_OAUTH_CLIENT_SECRET.cred
+printf "%s" "${OAUTH_REFRESH_TOKEN_SECRET:-$MEMOS_TOKEN}" | sudo systemd-creds encrypt --name=OAUTH_REFRESH_TOKEN_SECRET - /etc/memos-mcp/credentials/OAUTH_REFRESH_TOKEN_SECRET.cred
+sudo chmod 600 /etc/memos-mcp/credentials/*.cred
 
-# (Optional) edit the unit if your repo path differs from the default
-# default in the file: /home/giulio/react/memos/mcp-server
-
-systemctl --user daemon-reload
-systemctl --user enable --now memos-mcp.service
-systemctl --user status memos-mcp.service
+# Install and start the system unit. Disable the legacy user unit if it was used.
+systemctl --user disable --now memos-mcp.service || true
+sudo cp systemd/memos-mcp.system.service /etc/systemd/system/memos-mcp.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now memos-mcp.service
+sudo systemctl status memos-mcp.service
 ```
 
 Tail the logs with:
 
 ```bash
-journalctl --user -u memos-mcp -f
+sudo journalctl -u memos-mcp -f
 ```
 
 You should see:
 
 ```
-Memos MCP server listening on :8082 (POST /mcp, oauth=github(giuliohome), stateless)
+Memos MCP server listening on :8082 (POST /mcp, oauth=github(giuliohome), dcrGithubClient=configured, dcrGithubSecret=configured, stateless)
 ```
+
+The code also supports plaintext env vars as a fallback, but production
+deployments should keep `MEMOS_TOKEN`, `GITHUB_OAUTH_CLIENT_SECRET`, and
+`OAUTH_REFRESH_TOKEN_SECRET` out of `/etc/memos-mcp/env` and
+`~/.memos-mcp.env`.
 
 ## 5. Add the `/mcp` location to your reverse proxy
 
@@ -150,9 +166,10 @@ server {
 }
 ```
 
-If you also want the OAuth discovery endpoints to work over the LAN
-proxy (not strictly needed — Claude.ai uses the public Cloudflare tunnel
-hostname), add `location /.well-known/` pointing at the same backend.
+If you also want the OAuth discovery and broker endpoints to work over a
+LAN proxy, add `location /.well-known/` and `location /oauth/` pointing at
+the same backend. The production Cloudflare hostname in this setup points
+directly at `192.168.1.202:8082`.
 
 Apply:
 
@@ -167,6 +184,7 @@ return JSON straight away:
 
 ```bash
 curl -sS https://mcp-memo.giuliohome.com/.well-known/oauth-protected-resource | jq
+curl -sS https://mcp-memo.giuliohome.com/.well-known/oauth-protected-resource/mcp | jq
 curl -sS https://mcp-memo.giuliohome.com/.well-known/oauth-authorization-server | jq
 ```
 
@@ -191,24 +209,27 @@ curl -sS https://mcp-memo.giuliohome.com/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
-# expected: JSON-RPC body listing the 5 tools (and a /mcp auth ok user=… line in journalctl)
+# expected: JSON-RPC body listing the 5 tools with annotations
+# and /mcp auth ok + method/status lines in journalctl
 ```
 
-## 7. Register with Claude
+## 7. Register with Claude and ChatGPT
 
 ### claude.ai web / Android / iOS
 
 Settings → Connectors → Add custom connector:
 
 - URL: `https://mcp-memo.giuliohome.com/mcp`
-- Open *Advanced settings* and paste the GitHub OAuth App's Client ID +
-  Client Secret (from section 2).
+- Authentication: OAuth.
+- Prefer Dynamic Client Registration if Claude offers it. The broker accepts
+  Claude's callback `https://claude.ai/api/mcp/auth_callback`.
 
 The first request returns `401` with `WWW-Authenticate: … resource_metadata=…`;
-Claude.ai discovers the GitHub authorize/token URLs from our well-known
-metadata, walks you through `github.com/login/oauth/authorize`, and
-forwards the resulting bearer on every subsequent `/mcp` call. The server
-validates each request by calling `https://api.github.com/user`.
+Claude.ai discovers the broker metadata, dynamically registers a client,
+walks you through `github.com/login/oauth/authorize`, exchanges through
+`/oauth/token`, and forwards the resulting bearer on every subsequent
+`/mcp` call. The server validates each request by calling
+`https://api.github.com/user`.
 
 ### Claude Desktop / Claude Code
 
@@ -217,6 +238,24 @@ implement OAuth-aware MCP clients and will discover the metadata
 endpoints automatically when they hit the 401.
 
 Once added, the Memos tools (`list_memos`, `get_memo`, `create_memo`, `update_memo`, `delete_memo`) appear in the connector's tool list and can be called from any conversation.
+
+### ChatGPT Developer Mode Actions
+
+Settings → Apps → Advanced settings → Create app:
+
+- MCP URL: `https://mcp-memo.giuliohome.com/mcp`
+- Authentication: OAuth.
+- Advanced OAuth settings → Registration method: **Dynamic Client Registration**.
+- Default scopes: `read:user`; Base scopes: empty.
+- OIDC: disabled.
+
+During setup, keep logs open with `journalctl --user -u memos-mcp -f`. A
+successful setup shows `/oauth/register status=201`, `/oauth/token
+status=200`, and MCP discovery methods such as `initialize`,
+`notifications/initialized`, and `tools/list`. If Cloudflare Bot Fight
+Mode is enabled, create a bypass/skip rule for this hostname on
+`/oauth/*`, `/.well-known/*`, and `/mcp`; otherwise ChatGPT's backend can
+receive `403` before the request reaches this server.
 
 ## 8. Public exposure via Cloudflare Tunnel
 
