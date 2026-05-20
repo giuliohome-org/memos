@@ -306,6 +306,10 @@ function dcrClientSecret(clientID: string, config: OAuthConfig): string {
     .digest("base64url");
 }
 
+function isDcrClientIDFormat(clientID: string): boolean {
+  return clientID.startsWith(`${DCR_CLIENT_PREFIX}.`);
+}
+
 function isSupportedDcrRedirectURI(uri: string): boolean {
   try {
     const url = new URL(uri);
@@ -419,7 +423,13 @@ export function githubAuthorizeURL(query: Record<string, unknown>, config: OAuth
     params.set("error_description", "redirect_uri mismatch");
     return `${redirectURI}?${params.toString()}`;
   }
-  const upstreamClientID = registeredClient ? config.githubClientID : clientID;
+  const isDcrClient = !!registeredClient || isDcrClientIDFormat(clientID);
+  if (!registeredClient && isDcrClient && !isSupportedDcrRedirectURI(redirectURI)) {
+    params.set("error", "invalid_request");
+    params.set("error_description", "unsupported redirect_uri");
+    return `${redirectURI}?${params.toString()}`;
+  }
+  const upstreamClientID = isDcrClient ? config.githubClientID : clientID;
   if (!upstreamClientID) {
     params.set("error", "server_error");
     params.set("error_description", "missing upstream github client id");
@@ -549,6 +559,7 @@ export async function githubTokenExchange(
     return { status: 401, body: { error: "invalid_client" } };
   }
   const registeredClient = readDcrClient(clientID, config);
+  const isDcrClient = !!registeredClient || isDcrClientIDFormat(clientID);
   if (registeredClient) {
     const expectedSecret = dcrClientSecret(clientID, config);
     const expected = Buffer.from(expectedSecret);
@@ -575,9 +586,9 @@ export async function githubTokenExchange(
   forwarded.set("grant_type", "authorization_code");
   forwarded.set("code", code.githubCode);
   forwarded.set("redirect_uri", `${config.publicBaseUrl}/oauth/github/callback`);
-  forwarded.set("client_id", registeredClient ? (config.githubClientID ?? "") : clientID);
-  forwarded.set("client_secret", registeredClient ? (config.githubClientSecret ?? "") : clientSecret);
-  if (registeredClient && (!config.githubClientID || !config.githubClientSecret)) {
+  forwarded.set("client_id", isDcrClient ? (config.githubClientID ?? "") : clientID);
+  forwarded.set("client_secret", isDcrClient ? (config.githubClientSecret ?? "") : clientSecret);
+  if (isDcrClient && (!config.githubClientID || !config.githubClientSecret)) {
     return { status: 500, body: { error: "server_error", error_description: "missing upstream github oauth credentials" } };
   }
 
