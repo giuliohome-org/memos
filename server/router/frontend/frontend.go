@@ -5,6 +5,7 @@ import (
 	"embed"
 	"io/fs"
 	"net/http"
+	"path"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -36,8 +37,10 @@ func (*FrontendService) Serve(_ context.Context, e *echo.Echo) {
 			return true
 		}
 		// For index.html and root path, set no-cache headers to prevent browser caching
-		// This prevents sensitive data from being accessible via browser back button after logout
-		if c.Path() == "/" || c.Path() == "/index.html" {
+		// This prevents sensitive data from being accessible via browser back button after logout.
+		// index.html is also the SPA fallback for client routes such as /explore, so every
+		// extension-less path must skip the cache too, or a redeploy keeps serving stale bundles.
+		if c.Path() == "/" || c.Path() == "/index.html" || path.Ext(c.Request().URL.Path) == "" {
 			c.Response().Header().Set(echo.HeaderCacheControl, "no-cache, no-store, must-revalidate")
 			c.Response().Header().Set("Pragma", "no-cache")
 			c.Response().Header().Set("Expires", "0")
