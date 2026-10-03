@@ -155,6 +155,7 @@ func TestInstanceSettingMemoRelatedSetting(t *testing.T) {
 	require.NotNil(t, memoSetting)
 	require.GreaterOrEqual(t, memoSetting.ContentLengthLimit, int32(store.DefaultContentLengthLimit))
 	require.NotEmpty(t, memoSetting.Reactions)
+	require.False(t, memoSetting.EnableExplore)
 
 	// Set custom memo related setting
 	customReactions := []string{"👍", "👎", "🚀"}
@@ -164,6 +165,7 @@ func TestInstanceSettingMemoRelatedSetting(t *testing.T) {
 			MemoRelatedSetting: &storepb.InstanceMemoRelatedSetting{
 				ContentLengthLimit: 16384,
 				Reactions:          customReactions,
+				EnableExplore:      true,
 			},
 		},
 	})
@@ -174,6 +176,7 @@ func TestInstanceSettingMemoRelatedSetting(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int32(16384), memoSetting.ContentLengthLimit)
 	require.Equal(t, customReactions, memoSetting.Reactions)
+	require.True(t, memoSetting.EnableExplore)
 
 	ts.Close()
 }

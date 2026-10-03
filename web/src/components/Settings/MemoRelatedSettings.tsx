@@ -78,6 +78,13 @@ const MemoRelatedSettings = () => {
           />
         </SettingRow>
 
+        <SettingRow label={t("setting.system-section.enable-explore")}>
+          <Switch
+            checked={memoRelatedSetting.enableExplore}
+            onCheckedChange={(checked) => updatePartialSetting({ enableExplore: checked })}
+          />
+        </SettingRow>
+
         <SettingRow label={t("setting.system-section.display-with-updated-time")}>
           <Switch
             checked={memoRelatedSetting.displayWithUpdateTime}

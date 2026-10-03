@@ -1,13 +1,17 @@
+import { Navigate } from "react-router-dom";
 import { MemoRenderContext } from "@/components/MasonryView";
 import MemoView from "@/components/MemoView";
 import PagedMemoList from "@/components/PagedMemoList";
+import { useInstance } from "@/contexts/InstanceContext";
 import { useMemoFilters, useMemoSorting } from "@/hooks";
 import useCurrentUser from "@/hooks/useCurrentUser";
+import { Routes } from "@/router";
 import { State } from "@/types/proto/api/v1/common_pb";
 import { Memo, Visibility } from "@/types/proto/api/v1/memo_service_pb";
 
 const Explore = () => {
   const currentUser = useCurrentUser();
+  const { memoRelatedSetting } = useInstance();
 
   // Determine visibility filter based on authentication status
   // - Logged-in users: Can see PUBLIC and PROTECTED memos
@@ -27,6 +31,10 @@ const Explore = () => {
     pinnedFirst: false,
     state: State.NORMAL,
   });
+
+  if (!memoRelatedSetting.enableExplore) {
+    return <Navigate to={currentUser ? Routes.ROOT : Routes.AUTH} replace />;
+  }
 
   return (
     <PagedMemoList

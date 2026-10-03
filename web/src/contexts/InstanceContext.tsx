@@ -88,6 +88,7 @@ export function InstanceProvider({ children }: { children: ReactNode }) {
         updateInstanceConfig({
           memoRelatedSetting: {
             disallowPublicVisibility: memoRelatedSettingResponse.value.value.disallowPublicVisibility,
+            enableExplore: memoRelatedSettingResponse.value.value.enableExplore,
           },
         });
       }

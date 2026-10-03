@@ -5,12 +5,14 @@
 interface InstanceConfig {
   memoRelatedSetting: {
     disallowPublicVisibility: boolean;
+    enableExplore: boolean;
   };
 }
 
 let instanceConfig: InstanceConfig = {
   memoRelatedSetting: {
     disallowPublicVisibility: false,
+    enableExplore: false,
   },
 };
 

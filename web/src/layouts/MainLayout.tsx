@@ -5,12 +5,13 @@ import { MemoExplorer, MemoExplorerDrawer } from "@/components/MemoExplorer";
 import MobileHeader from "@/components/MobileHeader";
 import StatisticsView from "@/components/StatisticsView";
 import { userServiceClient } from "@/connect";
-import { useMemoFilters } from "@/hooks";
 import { useMemoFilterContext } from "@/contexts/MemoFilterContext";
+import { useMemoFilters } from "@/hooks";
 import useCurrentUser from "@/hooks/useCurrentUser";
 import { useFilteredMemoStats } from "@/hooks/useFilteredMemoStats";
 import useMediaQuery from "@/hooks/useMediaQuery";
 import { useMemos } from "@/hooks/useMemoQueries";
+import { useStatsVisibilityFilter } from "@/hooks/useStatsVisibilityFilter";
 import { cn } from "@/lib/utils";
 import { Routes } from "@/router";
 
@@ -22,7 +23,9 @@ const MainLayout = () => {
   const [profileUserName, setProfileUserName] = useState<string | undefined>();
   const { hasActiveFilters } = useMemoFilterContext();
   const memoFilter = useMemoFilters();
-  const { data: memosResponse } = useMemos({ filter: memoFilter });
+  const visibilityFilter = useStatsVisibilityFilter();
+  const highlightFilter = [memoFilter, visibilityFilter].filter(Boolean).join(" && ") || undefined;
+  const { data: memosResponse } = useMemos({ filter: highlightFilter });
   const memos = memosResponse?.memos || [];
 
   // Determine context based on current route

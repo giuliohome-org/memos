@@ -2,6 +2,7 @@ import { timestampDate } from "@bufbuild/protobuf/wkt";
 import dayjs from "dayjs";
 import { useCallback, useMemo } from "react";
 import { useMemos } from "@/hooks/useMemoQueries";
+import { useStatsVisibilityFilter } from "@/hooks/useStatsVisibilityFilter";
 import { useTagColors } from "@/hooks/useTagColors";
 
 /**
@@ -15,7 +16,8 @@ import { useTagColors } from "@/hooks/useTagColors";
  */
 export const useTagCalendarData = () => {
   const { tagColors } = useTagColors();
-  const { data: memosResponse } = useMemos({ pageSize: 1000 });
+  const visibilityFilter = useStatsVisibilityFilter();
+  const { data: memosResponse } = useMemos({ pageSize: 1000, ...(visibilityFilter && { filter: visibilityFilter }) });
 
   // Build date→tags mapping from loaded memos
   const tagsByDate = useMemo(() => {

@@ -3,6 +3,7 @@ import dayjs from "dayjs";
 import { countBy } from "lodash-es";
 import { useMemo } from "react";
 import { useMemos } from "@/hooks/useMemoQueries";
+import { useStatsVisibilityFilter } from "@/hooks/useStatsVisibilityFilter";
 import { useUserStats } from "@/hooks/useUserQueries";
 import type { StatisticsData } from "@/types/statistics";
 
@@ -23,7 +24,11 @@ export const useFilteredMemoStats = (options: UseFilteredMemoStatsOptions = {}):
   const { data: userStats, isLoading: isLoadingUserStats } = useUserStats(userName);
 
   // Fetch memos for fallback computation (or when userName is not provided)
-  const { data: memosResponse, isLoading: isLoadingMemos } = useMemos({});
+  const visibilityFilter = useStatsVisibilityFilter();
+  const { data: memosResponse, isLoading: isLoadingMemos } = useMemos({
+    pageSize: 1000,
+    ...(visibilityFilter && { filter: visibilityFilter }),
+  });
 
   const data = useMemo(() => {
     const loading = isLoadingUserStats || isLoadingMemos;

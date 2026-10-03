@@ -102,4 +102,6 @@ message InstanceMemoRelatedSetting {
   bool enable_double_click_edit = 4;
   // reactions is the list of reactions.
   repeated string reactions = 7;
+  // enable_explore shows the Explore page. It is hidden by default.
+  bool enable_explore = 8;
 }

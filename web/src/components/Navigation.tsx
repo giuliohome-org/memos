@@ -1,6 +1,7 @@
 import { BellIcon, EarthIcon, LibraryIcon, PaperclipIcon, UserCircleIcon } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useInstance } from "@/contexts/InstanceContext";
 import useCurrentUser from "@/hooks/useCurrentUser";
 import { useNotifications } from "@/hooks/useUserQueries";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,7 @@ const Navigation = (props: Props) => {
   const { collapsed, className } = props;
   const t = useTranslate();
   const currentUser = useCurrentUser();
+  const { memoRelatedSetting } = useInstance();
   const { data: notifications = [] } = useNotifications();
 
   const homeNavLink: NavLinkItem = {
@@ -69,14 +71,17 @@ const Navigation = (props: Props) => {
     icon: <UserCircleIcon className="w-6 h-auto shrink-0" />,
   };
 
+  // Explore is hidden unless enabled in the memo-related instance settings.
+  const showExplore = memoRelatedSetting.enableExplore;
   const navLinks: NavLinkItem[] = currentUser
-    ? [homeNavLink, exploreNavLink, attachmentsNavLink, inboxNavLink]
-    : [exploreNavLink, signInNavLink];
+    ? [homeNavLink, ...(showExplore ? [exploreNavLink] : []), attachmentsNavLink, inboxNavLink]
+    : [...(showExplore ? [exploreNavLink] : []), signInNavLink];
+  const logoPath = currentUser ? Routes.ROOT : showExplore ? Routes.EXPLORE : Routes.AUTH;
 
   return (
     <header className={cn("w-full h-full overflow-auto flex flex-col justify-between items-start gap-4 hide-scrollbar", className)}>
       <div className="w-full px-1 py-1 flex flex-col justify-start items-start space-y-2 overflow-auto overflow-x-hidden hide-scrollbar shrink">
-        <NavLink className="mb-3 cursor-default" to={currentUser ? Routes.ROOT : Routes.EXPLORE}>
+        <NavLink className="mb-3 cursor-default" to={logoPath}>
           <MemosLogo collapsed={collapsed} />
         </NavLink>
         {navLinks.map((navLink) => (

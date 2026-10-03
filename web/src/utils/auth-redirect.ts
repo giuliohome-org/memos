@@ -26,8 +26,8 @@ export function redirectOnAuthFailure(): void {
     return;
   }
 
-  const disallowPublicVisibility = getInstanceConfig().memoRelatedSetting.disallowPublicVisibility;
-  const target = disallowPublicVisibility ? ROUTES.AUTH : ROUTES.EXPLORE;
+  const { disallowPublicVisibility, enableExplore } = getInstanceConfig().memoRelatedSetting;
+  const target = disallowPublicVisibility || !enableExplore ? ROUTES.AUTH : ROUTES.EXPLORE;
 
   // Only redirect if it's a private route or disallowPublicVisibility is enabled
   if (disallowPublicVisibility || isPrivateRoute(currentPath)) {

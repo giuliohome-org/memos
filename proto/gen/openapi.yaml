@@ -2216,6 +2216,9 @@ components:
                     items:
                         type: string
                     description: reactions is the list of reactions.
+                enableExplore:
+                    type: boolean
+                    description: enable_explore shows the Explore page. It is hidden by default.
             description: Memo-related instance settings and policies.
         InstanceSetting_StorageSetting:
             type: object
