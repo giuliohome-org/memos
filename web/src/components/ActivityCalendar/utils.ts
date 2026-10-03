@@ -12,7 +12,7 @@ export type TranslateFunction = ReturnType<typeof useTranslate>;
 
 export const getCellIntensityClass = (day: CalendarDayCell, maxCount: number): string => {
   if (!day.isCurrentMonth || day.count === 0) {
-    return CELL_STYLES.EMPTY;
+    return day.isCurrentMonth && day.isWeekend ? CELL_STYLES.EMPTY_WEEKEND : CELL_STYLES.EMPTY;
   }
 
   const ratio = day.count / maxCount;

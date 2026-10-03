@@ -19,6 +19,7 @@ export const CELL_STYLES = {
   LOW: "bg-primary/60 text-primary-foreground shadow-sm",
   MINIMAL: "bg-primary/40 text-foreground",
   EMPTY: "bg-secondary/30 text-muted-foreground hover:bg-secondary/50",
+  EMPTY_WEEKEND: "bg-primary/10 text-muted-foreground hover:bg-primary/15",
 } as const;
 
 export const SMALL_CELL_SIZE = {
