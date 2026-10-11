@@ -1,8 +1,9 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import dayjs from "dayjs";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import useLocalStorage from "react-use/lib/useLocalStorage";
 import { MonthCalendar } from "@/components/ActivityCalendar";
+import { useMemoFilterContext } from "@/contexts/MemoFilterContext";
 import { useDateFilterNavigation } from "@/hooks";
 import type { Memo } from "@/types/proto/api/v1/memo_service_pb";
 import type { StatisticsData } from "@/types/statistics";
@@ -17,7 +18,7 @@ const StatisticsView = (props: Props) => {
   const { statisticsData, memos } = props;
   const { activityStats } = statisticsData;
   const navigateToDateFilter = useDateFilterNavigation();
-  const [visibleMonthString, setVisibleMonthString] = useState(dayjs().format("YYYY-MM"));
+  const { visibleMonth: visibleMonthString, setVisibleMonth: setVisibleMonthString, monthOnly, setMonthOnly } = useMemoFilterContext();
   const [workdaysOnly, setWorkdaysOnly] = useLocalStorage<boolean>("calendar-workdays-only", false);
 
   const maxCount = useMemo(() => {
@@ -43,6 +44,8 @@ const StatisticsView = (props: Props) => {
         activityStats={activityStats}
         workdaysOnly={workdaysOnly}
         onWorkdaysOnlyChange={setWorkdaysOnly}
+        monthOnly={monthOnly}
+        onMonthOnlyChange={setMonthOnly}
       />
 
       <div className="w-full animate-scale-in">

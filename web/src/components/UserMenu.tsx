@@ -78,6 +78,7 @@ const UserMenu = (props: Props) => {
         "tag-tree-auto-expand",
         "tag-colors",
         "calendar-workdays-only",
+        "calendar-month-only",
       ];
       const keysToRemove: string[] = [];
 

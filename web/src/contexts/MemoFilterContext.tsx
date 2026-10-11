@@ -1,6 +1,8 @@
+import dayjs from "dayjs";
 import { uniqBy } from "lodash-es";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import useLocalStorage from "react-use/lib/useLocalStorage";
 
 export type FilterFactor =
   | "tagSearch"
@@ -50,6 +52,11 @@ interface MemoFilterContextValue {
   clearAllFilters: () => void;
   setShortcut: (shortcut?: string) => void;
   hasFilter: (filter: MemoFilter) => boolean;
+  // Month shown by the calendar (YYYY-MM); with monthOnly the memo lists are limited to it.
+  visibleMonth: string;
+  setVisibleMonth: (month: string) => void;
+  monthOnly: boolean;
+  setMonthOnly: (monthOnly: boolean) => void;
 }
 
 const MemoFilterContext = createContext<MemoFilterContextValue | null>(null);
@@ -64,6 +71,8 @@ export function MemoFilterProvider({ children }: { children: ReactNode }) {
     return parseFilterQuery(searchParams.get("filter"));
   });
   const [shortcut, setShortcutState] = useState<string | undefined>(undefined);
+  const [visibleMonth, setVisibleMonth] = useState(() => dayjs().format("YYYY-MM"));
+  const [monthOnly = true, setMonthOnly] = useLocalStorage<boolean>("calendar-month-only", true);
 
   // Sync URL to state when URL changes externally
   useEffect(() => {
@@ -137,6 +146,10 @@ export function MemoFilterProvider({ children }: { children: ReactNode }) {
         clearAllFilters,
         setShortcut,
         hasFilter,
+        visibleMonth,
+        setVisibleMonth,
+        monthOnly,
+        setMonthOnly,
       }}
     >
       {children}

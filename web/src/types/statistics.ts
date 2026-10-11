@@ -8,6 +8,8 @@ export interface MonthNavigatorProps {
   activityStats: Record<string, number>;
   workdaysOnly?: boolean;
   onWorkdaysOnlyChange?: (workdaysOnly: boolean) => void;
+  monthOnly?: boolean;
+  onMonthOnlyChange?: (monthOnly: boolean) => void;
 }
 
 export interface StatisticsData {

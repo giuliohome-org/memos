@@ -29,6 +29,8 @@
     "calendar": "Calendar",
     "show-workdays-only": "Show workdays only",
     "show-all-days": "Show all days",
+    "show-month-memos-only": "Show only memos of this month",
+    "show-all-months-memos": "Show memos of every month",
     "cancel": "Cancel",
     "change": "Change",
     "clear": "Clear",

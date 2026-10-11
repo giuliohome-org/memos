@@ -1,3 +1,4 @@
+import dayjs from "dayjs";
 import { useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useInstance } from "@/contexts/InstanceContext";
@@ -38,7 +39,7 @@ export const useMemoFilters = (options: UseMemoFiltersOptions = {}): string | un
   const { creatorName, includeShortcuts = false, includePinned = false, visibilities } = options;
 
   const { shortcuts } = useAuth();
-  const { filters, shortcut: currentShortcut } = useMemoFilterContext();
+  const { filters, shortcut: currentShortcut, visibleMonth, monthOnly } = useMemoFilterContext();
   const { memoRelatedSetting } = useInstance();
 
   // Get selected shortcut if needed
@@ -50,6 +51,8 @@ export const useMemoFilters = (options: UseMemoFiltersOptions = {}): string | un
   // Build filter
   return useMemo(() => {
     const conditions: string[] = [];
+    const displayWithUpdateTime = memoRelatedSetting?.displayWithUpdateTime ?? false;
+    const timeFactor = displayWithUpdateTime ? "updated_ts" : "created_ts";
 
     // Add creator filter if provided
     if (creatorName) {
@@ -78,15 +81,18 @@ export const useMemoFilters = (options: UseMemoFiltersOptions = {}): string | un
       } else if (filter.factor === "property.hasCode") {
         conditions.push(`has_code`);
       } else if (filter.factor === "displayTime") {
-        const displayWithUpdateTime = memoRelatedSetting?.displayWithUpdateTime ?? false;
-        const factor = displayWithUpdateTime ? "updated_ts" : "created_ts";
-
         const filterDate = new Date(filter.value);
         const filterUtcTimestamp = filterDate.getTime() + filterDate.getTimezoneOffset() * 60 * 1000;
         const timestampAfter = filterUtcTimestamp / 1000;
 
-        conditions.push(`${factor} >= ${timestampAfter} && ${factor} < ${timestampAfter + 60 * 60 * 24}`);
+        conditions.push(`${timeFactor} >= ${timestampAfter} && ${timeFactor} < ${timestampAfter + 60 * 60 * 24}`);
       }
+    }
+
+    // Limit to the month shown by the calendar; a selected day is narrower and wins
+    if (monthOnly && !filters.some((filter) => filter.factor === "displayTime")) {
+      const monthStart = dayjs(`${visibleMonth}-01`);
+      conditions.push(`${timeFactor} >= ${monthStart.unix()} && ${timeFactor} < ${monthStart.add(1, "month").unix()}`);
     }
 
     // Add visibility filter if specified
@@ -96,5 +102,5 @@ export const useMemoFilters = (options: UseMemoFiltersOptions = {}): string | un
     }
 
     return conditions.length > 0 ? conditions.join(" && ") : undefined;
-  }, [creatorName, includeShortcuts, includePinned, visibilities, selectedShortcut, filters, memoRelatedSetting]);
+  }, [creatorName, includeShortcuts, includePinned, visibilities, selectedShortcut, filters, memoRelatedSetting, visibleMonth, monthOnly]);
 };

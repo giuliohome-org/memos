@@ -1,4 +1,4 @@
-import { BriefcaseIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { BriefcaseIcon, CalendarRangeIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useState } from "react";
 import { YearCalendar } from "@/components/ActivityCalendar";
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -8,7 +8,15 @@ import { cn } from "@/lib/utils";
 import { useTranslate } from "@/utils/i18n";
 import type { MonthNavigatorProps } from "@/types/statistics";
 
-export const MonthNavigator = ({ visibleMonth, onMonthChange, activityStats, workdaysOnly, onWorkdaysOnlyChange }: MonthNavigatorProps) => {
+export const MonthNavigator = ({
+  visibleMonth,
+  onMonthChange,
+  activityStats,
+  workdaysOnly,
+  onWorkdaysOnlyChange,
+  monthOnly,
+  onMonthOnlyChange,
+}: MonthNavigatorProps) => {
   const t = useTranslate();
   const [isOpen, setIsOpen] = useState(false);
   const currentMonth = new Date(visibleMonth);
@@ -47,6 +55,16 @@ export const MonthNavigator = ({ visibleMonth, onMonthChange, activityStats, wor
         </DialogContent>
       </Dialog>
       <div className="flex justify-end items-center shrink-0 gap-0.5">
+        <button
+          className={cn(
+            "p-1 rounded-md transition-all",
+            monthOnly ? "bg-primary/10 text-primary hover:bg-primary/20" : "hover:bg-secondary/50 text-muted-foreground hover:text-foreground",
+          )}
+          onClick={() => onMonthOnlyChange?.(!monthOnly)}
+          title={monthOnly ? t("common.show-all-months-memos") : t("common.show-month-memos-only")}
+        >
+          <CalendarRangeIcon className="w-4 h-4" />
+        </button>
         <button
           className={cn(
             "p-1 rounded-md transition-all mr-1",
