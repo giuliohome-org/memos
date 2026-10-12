@@ -5,8 +5,8 @@ import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@/components/
 import i18n from "@/i18n";
 import { addMonths, formatMonth, getMonthFromDate, getYearFromDate, setYearAndMonth } from "@/lib/calendar-utils";
 import { cn } from "@/lib/utils";
-import { useTranslate } from "@/utils/i18n";
 import type { MonthNavigatorProps } from "@/types/statistics";
+import { useTranslate } from "@/utils/i18n";
 
 export const MonthNavigator = ({
   visibleMonth,
@@ -51,14 +51,22 @@ export const MonthNavigator = ({
         </DialogTrigger>
         <DialogContent className="p-0 border-none bg-background md:max-w-4xl" size="2xl" showCloseButton={false}>
           <DialogTitle className="sr-only">Select Month</DialogTitle>
-          <YearCalendar selectedYear={currentYear} data={activityStats} onYearChange={handleYearChange} onDateClick={handleDateClick} workdaysOnly={workdaysOnly} />
+          <YearCalendar
+            selectedYear={currentYear}
+            data={activityStats}
+            onYearChange={handleYearChange}
+            onDateClick={handleDateClick}
+            workdaysOnly={workdaysOnly}
+          />
         </DialogContent>
       </Dialog>
       <div className="flex justify-end items-center shrink-0 gap-0.5">
         <button
           className={cn(
             "p-1 rounded-md transition-all",
-            monthOnly ? "bg-primary/10 text-primary hover:bg-primary/20" : "hover:bg-secondary/50 text-muted-foreground hover:text-foreground",
+            monthOnly
+              ? "bg-primary/10 text-primary hover:bg-primary/20"
+              : "hover:bg-secondary/50 text-muted-foreground hover:text-foreground",
           )}
           onClick={() => onMonthOnlyChange?.(!monthOnly)}
           title={monthOnly ? t("common.show-all-months-memos") : t("common.show-month-memos-only")}
@@ -68,7 +76,9 @@ export const MonthNavigator = ({
         <button
           className={cn(
             "p-1 rounded-md transition-all mr-1",
-            workdaysOnly ? "bg-primary/10 text-primary hover:bg-primary/20" : "hover:bg-secondary/50 text-muted-foreground hover:text-foreground",
+            workdaysOnly
+              ? "bg-primary/10 text-primary hover:bg-primary/20"
+              : "hover:bg-secondary/50 text-muted-foreground hover:text-foreground",
           )}
           onClick={() => onWorkdaysOnlyChange?.(!workdaysOnly)}
           title={workdaysOnly ? t("common.show-all-days") : t("common.show-workdays-only")}

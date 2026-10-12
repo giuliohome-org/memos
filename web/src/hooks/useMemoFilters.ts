@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useInstance } from "@/contexts/InstanceContext";
 import { useMemoFilterContext } from "@/contexts/MemoFilterContext";
+import { useCalendarPreferences } from "@/hooks/useCalendarPreferences";
 import { Visibility } from "@/types/proto/api/v1/memo_service_pb";
 
 const extractUserIdFromName = (name: string): string => {
@@ -39,7 +40,8 @@ export const useMemoFilters = (options: UseMemoFiltersOptions = {}): string | un
   const { creatorName, includeShortcuts = false, includePinned = false, visibilities } = options;
 
   const { shortcuts } = useAuth();
-  const { filters, shortcut: currentShortcut, visibleMonth, monthOnly } = useMemoFilterContext();
+  const { filters, shortcut: currentShortcut, visibleMonth } = useMemoFilterContext();
+  const { monthOnly } = useCalendarPreferences();
   const { memoRelatedSetting } = useInstance();
 
   // Get selected shortcut if needed

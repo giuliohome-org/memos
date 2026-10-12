@@ -1,59 +1,89 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import dayjs from "dayjs";
 import { useCallback, useMemo } from "react";
+import { useCalendarPreferences } from "@/hooks/useCalendarPreferences";
 import { useMemos } from "@/hooks/useMemoQueries";
 import { useStatsVisibilityFilter } from "@/hooks/useStatsVisibilityFilter";
-import { useTagColors } from "@/hooks/useTagColors";
+
+/** What the calendar writes for one memo of a day. */
+export interface CalendarDayEntry {
+  /** Tags of the memo that have a calendar style, written with their label. */
+  tags: { label: string; color?: string }[];
+  /** First line of the memo without tags and markdown; empty when the memo is only tags. */
+  text: string;
+}
 
 /**
- * Self-contained hook: computes per-date tag colors for the calendar.
+ * First line of a memo that has some text once tags, markdown markers and links are removed:
+ * "🇮🇹 Natale #festivo" → "🇮🇹 Natale", "#sw" → "".
+ */
+export const getMemoCalendarText = (content: string): string => {
+  for (const rawLine of content.split("\n")) {
+    const line = rawLine
+      .replace(/^\s*(#{1,6}\s+|>\s*|[-*+]\s+(\[[ xX]\]\s+)?|\d+\.\s+)/, "")
+      .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/https?:\/\/\S+/g, "")
+      .replace(/(^|\s)#[^\s#]+/g, "$1")
+      .replace(/[*_~`]+/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (line) return line;
+  }
+  return "";
+};
+
+/**
+ * Self-contained hook: what the calendar shows for each date.
  *
- * Logic:
- *  1. Reads the tag→color mapping from localStorage (useTagColors)
- *  2. Fetches memos (up to 1000) to know which tags appear on which date
- *  3. Returns getColorsForDate(date) that looks up tags for that date
- *     and maps them to their assigned colors on the fly
+ *  1. Reads the tag styles (color and label) from the user's calendar preferences
+ *  2. Fetches memos (up to 1000) to know what happens on which date
+ *  3. Returns, for a date, one entry per memo (oldest first) and the colors of its styled tags
  */
 export const useTagCalendarData = () => {
-  const { tagColors } = useTagColors();
+  const { tagStyles } = useCalendarPreferences();
   const visibilityFilter = useStatsVisibilityFilter();
   const { data: memosResponse } = useMemos({ pageSize: 1000, ...(visibilityFilter && { filter: visibilityFilter }) });
 
-  // Build date→tags mapping from loaded memos
-  const tagsByDate = useMemo(() => {
-    const map: Record<string, string[]> = {};
-    if (!memosResponse?.memos) return map;
-
-    for (const memo of memosResponse.memos) {
+  const entriesByDate = useMemo(() => {
+    const byDate: Record<string, { time: number; entry: CalendarDayEntry }[]> = {};
+    for (const memo of memosResponse?.memos ?? []) {
       const displayTime = memo.displayTime ? timestampDate(memo.displayTime) : undefined;
-      if (!displayTime || !memo.tags || memo.tags.length === 0) continue;
+      if (!displayTime) continue;
 
-      const dateStr = dayjs(displayTime).format("YYYY-MM-DD");
-      if (!map[dateStr]) map[dateStr] = [];
-      for (const tag of memo.tags) {
-        if (!map[dateStr].includes(tag)) {
-          map[dateStr].push(tag);
-        }
+      const tags = (memo.tags ?? [])
+        .filter((tag) => tagStyles[tag])
+        .map((tag) => ({ label: tagStyles[tag].label || tag, color: tagStyles[tag].color || undefined }));
+      let text = getMemoCalendarText(memo.content);
+      if (!text && tags.length === 0) {
+        text = (memo.tags ?? []).map((tag) => `#${tag}`).join(" ");
       }
-    }
-    return map;
-  }, [memosResponse]);
 
-  // On-the-fly: given a date, return the unique colors for its tags
+      const date = dayjs(displayTime).format("YYYY-MM-DD");
+      (byDate[date] ??= []).push({ time: displayTime.getTime(), entry: { tags, text } });
+    }
+
+    const result: Record<string, CalendarDayEntry[]> = {};
+    for (const [date, items] of Object.entries(byDate)) {
+      result[date] = items.sort((a, b) => a.time - b.time).map((item) => item.entry);
+    }
+    return result;
+  }, [memosResponse, tagStyles]);
+
+  const getEntriesForDate = useCallback((date: string): CalendarDayEntry[] | undefined => entriesByDate[date], [entriesByDate]);
+
+  // Unique colors of the styled tags of a date, for the compact calendar
   const getColorsForDate = useCallback(
     (date: string): string[] | undefined => {
-      const tags = tagsByDate[date];
-      if (!tags) return undefined;
-
       const colors: string[] = [];
-      for (const tag of tags) {
-        const c = tagColors[tag];
-        if (c && !colors.includes(c)) colors.push(c);
+      for (const entry of entriesByDate[date] ?? []) {
+        for (const tag of entry.tags) {
+          if (tag.color && !colors.includes(tag.color)) colors.push(tag.color);
+        }
       }
       return colors.length > 0 ? colors : undefined;
     },
-    [tagsByDate, tagColors],
+    [entriesByDate],
   );
 
-  return { getColorsForDate };
+  return { getEntriesForDate, getColorsForDate };
 };

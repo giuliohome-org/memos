@@ -60,6 +60,11 @@ export const isTokenExpired = (): boolean => {
   return new Date() >= new Date(tokenExpiresAt.getTime() - 30000);
 };
 
+// True when a token is held but is expired or about to expire (see isTokenExpired).
+export const isAccessTokenStale = (): boolean => {
+  return getAccessToken() !== null && tokenExpiresAt !== null && isTokenExpired();
+};
+
 export const clearAccessToken = (): void => {
   accessToken = null;
   tokenExpiresAt = null;

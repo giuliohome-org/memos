@@ -1,10 +1,10 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import dayjs from "dayjs";
 import { useMemo } from "react";
-import useLocalStorage from "react-use/lib/useLocalStorage";
 import { MonthCalendar } from "@/components/ActivityCalendar";
 import { useMemoFilterContext } from "@/contexts/MemoFilterContext";
 import { useDateFilterNavigation } from "@/hooks";
+import { useCalendarPreferences } from "@/hooks/useCalendarPreferences";
 import type { Memo } from "@/types/proto/api/v1/memo_service_pb";
 import type { StatisticsData } from "@/types/statistics";
 import { MonthNavigator } from "./MonthNavigator";
@@ -18,8 +18,8 @@ const StatisticsView = (props: Props) => {
   const { statisticsData, memos } = props;
   const { activityStats } = statisticsData;
   const navigateToDateFilter = useDateFilterNavigation();
-  const { visibleMonth: visibleMonthString, setVisibleMonth: setVisibleMonthString, monthOnly, setMonthOnly } = useMemoFilterContext();
-  const [workdaysOnly, setWorkdaysOnly] = useLocalStorage<boolean>("calendar-workdays-only", false);
+  const { visibleMonth: visibleMonthString, setVisibleMonth: setVisibleMonthString } = useMemoFilterContext();
+  const { workdaysOnly, setWorkdaysOnly, monthOnly, setMonthOnly } = useCalendarPreferences();
 
   const maxCount = useMemo(() => {
     const counts = Object.values(activityStats);

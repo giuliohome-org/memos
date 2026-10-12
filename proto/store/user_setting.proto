@@ -41,6 +41,17 @@ message GeneralUserSetting {
   // The user's theme preference.
   // This references a CSS file in the web/public/themes/ directory.
   string theme = 3;
+  // Calendar style of each tag, keyed by tag name.
+  map<string, TagStyle> tag_styles = 4;
+  // Show only Monday to Friday in the calendar.
+  bool calendar_workdays_only = 5;
+  // List memos of every month instead of only the month shown by the calendar.
+  bool calendar_all_months = 6;
+
+  message TagStyle {
+    string color = 1;
+    string label = 2;
+  }
 }
 
 message RefreshTokensUserSetting {

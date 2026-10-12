@@ -412,9 +412,12 @@ func (s *APIV1Service) UpdateUserSetting(ctx context.Context, request *v1pb.Upda
 	}
 
 	updatedGeneral := &v1pb.UserSetting_GeneralSetting{
-		MemoVisibility: generalSetting.GetMemoVisibility(),
-		Locale:         generalSetting.GetLocale(),
-		Theme:          generalSetting.GetTheme(),
+		MemoVisibility:       generalSetting.GetMemoVisibility(),
+		Locale:               generalSetting.GetLocale(),
+		Theme:                generalSetting.GetTheme(),
+		TagStyles:            convertTagStylesFromStore(generalSetting.GetTagStyles()),
+		CalendarWorkdaysOnly: generalSetting.GetCalendarWorkdaysOnly(),
+		CalendarAllMonths:    generalSetting.GetCalendarAllMonths(),
 	}
 
 	// Apply updates for fields specified in the update mask
@@ -427,6 +430,12 @@ func (s *APIV1Service) UpdateUserSetting(ctx context.Context, request *v1pb.Upda
 			updatedGeneral.Theme = incomingGeneral.Theme
 		case "locale":
 			updatedGeneral.Locale = incomingGeneral.Locale
+		case "tag_styles", "tagStyles":
+			updatedGeneral.TagStyles = normalizeTagStyles(incomingGeneral.GetTagStyles())
+		case "calendar_workdays_only", "calendarWorkdaysOnly":
+			updatedGeneral.CalendarWorkdaysOnly = incomingGeneral.GetCalendarWorkdaysOnly()
+		case "calendar_all_months", "calendarAllMonths":
+			updatedGeneral.CalendarAllMonths = incomingGeneral.GetCalendarAllMonths()
 		default:
 			// Ignore unsupported fields
 		}
@@ -1041,9 +1050,12 @@ func convertUserSettingFromStore(storeSetting *storepb.UserSetting, userID int32
 		if general := storeSetting.GetGeneral(); general != nil {
 			setting.Value = &v1pb.UserSetting_GeneralSetting_{
 				GeneralSetting: &v1pb.UserSetting_GeneralSetting{
-					Locale:         general.Locale,
-					MemoVisibility: general.MemoVisibility,
-					Theme:          general.Theme,
+					Locale:               general.Locale,
+					MemoVisibility:       general.MemoVisibility,
+					Theme:                general.Theme,
+					TagStyles:            convertTagStylesFromStore(general.TagStyles),
+					CalendarWorkdaysOnly: general.CalendarWorkdaysOnly,
+					CalendarAllMonths:    general.CalendarAllMonths,
 				},
 			}
 		} else {
@@ -1089,9 +1101,12 @@ func convertUserSettingToStore(apiSetting *v1pb.UserSetting, userID int32, key s
 		if general := apiSetting.GetGeneralSetting(); general != nil {
 			storeSetting.Value = &storepb.UserSetting_General{
 				General: &storepb.GeneralUserSetting{
-					Locale:         general.Locale,
-					MemoVisibility: general.MemoVisibility,
-					Theme:          general.Theme,
+					Locale:               general.Locale,
+					MemoVisibility:       general.MemoVisibility,
+					Theme:                general.Theme,
+					TagStyles:            convertTagStylesToStore(general.TagStyles),
+					CalendarWorkdaysOnly: general.CalendarWorkdaysOnly,
+					CalendarAllMonths:    general.CalendarAllMonths,
 				},
 			}
 		} else {
@@ -1121,6 +1136,51 @@ func convertUserSettingToStore(apiSetting *v1pb.UserSetting, userID int32, key s
 	}
 
 	return storeSetting, nil
+}
+
+const (
+	maxTagStyleLabelRunes = 40
+	maxTagStyleColorBytes = 32
+)
+
+// normalizeTagStyles trims labels, caps their length and drops tags with neither color nor label.
+func normalizeTagStyles(styles map[string]*v1pb.UserSetting_GeneralSetting_TagStyle) map[string]*v1pb.UserSetting_GeneralSetting_TagStyle {
+	normalized := make(map[string]*v1pb.UserSetting_GeneralSetting_TagStyle, len(styles))
+	for tag, style := range styles {
+		tag = strings.TrimSpace(tag)
+		color := strings.TrimSpace(style.GetColor())
+		label := []rune(strings.TrimSpace(style.GetLabel()))
+		if len(label) > maxTagStyleLabelRunes {
+			label = label[:maxTagStyleLabelRunes]
+		}
+		if tag == "" || len(color) > maxTagStyleColorBytes || (color == "" && len(label) == 0) {
+			continue
+		}
+		normalized[tag] = &v1pb.UserSetting_GeneralSetting_TagStyle{Color: color, Label: string(label)}
+	}
+	return normalized
+}
+
+func convertTagStylesFromStore(styles map[string]*storepb.GeneralUserSetting_TagStyle) map[string]*v1pb.UserSetting_GeneralSetting_TagStyle {
+	if len(styles) == 0 {
+		return nil
+	}
+	converted := make(map[string]*v1pb.UserSetting_GeneralSetting_TagStyle, len(styles))
+	for tag, style := range styles {
+		converted[tag] = &v1pb.UserSetting_GeneralSetting_TagStyle{Color: style.GetColor(), Label: style.GetLabel()}
+	}
+	return converted
+}
+
+func convertTagStylesToStore(styles map[string]*v1pb.UserSetting_GeneralSetting_TagStyle) map[string]*storepb.GeneralUserSetting_TagStyle {
+	if len(styles) == 0 {
+		return nil
+	}
+	converted := make(map[string]*storepb.GeneralUserSetting_TagStyle, len(styles))
+	for tag, style := range styles {
+		converted[tag] = &storepb.GeneralUserSetting_TagStyle{Color: style.GetColor(), Label: style.GetLabel()}
+	}
+	return converted
 }
 
 // extractWebhookIDFromName extracts webhook ID from resource name.

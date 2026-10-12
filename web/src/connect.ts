@@ -1,7 +1,7 @@
 import { timestampDate } from "@bufbuild/protobuf/wkt";
 import { Code, ConnectError, createClient, type Interceptor } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
-import { getAccessToken, setAccessToken } from "./auth-state";
+import { getAccessToken, isAccessTokenStale, setAccessToken } from "./auth-state";
 import { ActivityService } from "./types/proto/api/v1/activity_service_pb";
 import { AttachmentService } from "./types/proto/api/v1/attachment_service_pb";
 import { AuthService } from "./types/proto/api/v1/auth_service_pb";
@@ -83,6 +83,16 @@ async function refreshAccessToken(): Promise<void> {
 // ============================================================================
 
 const authInterceptor: Interceptor = (next) => async (req) => {
+  // Public methods such as ListMemos answer an expired token as if the request came from a
+  // visitor (only public memos, no 401), so the token is renewed before it is sent.
+  if (isAccessTokenStale()) {
+    try {
+      await tokenRefreshManager.refresh(refreshAccessToken);
+    } catch {
+      redirectOnAuthFailure();
+    }
+  }
+
   const token = getAccessToken();
   if (token) {
     req.header.set("Authorization", `Bearer ${token}`);

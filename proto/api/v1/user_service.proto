@@ -399,6 +399,20 @@ message UserSetting {
     // This references a CSS file in the web/public/themes/ directory.
     // If not set, the default theme will be used.
     string theme = 4 [(google.api.field_behavior) = OPTIONAL];
+    // Calendar style of each tag, keyed by tag name.
+    map<string, TagStyle> tag_styles = 5 [(google.api.field_behavior) = OPTIONAL];
+    // Show only Monday to Friday in the calendar.
+    bool calendar_workdays_only = 6 [(google.api.field_behavior) = OPTIONAL];
+    // List memos of every month instead of only the month shown by the calendar.
+    bool calendar_all_months = 7 [(google.api.field_behavior) = OPTIONAL];
+
+    // How a tag shows up in the calendar.
+    message TagStyle {
+      // Color of the tag, e.g. "#ef4444"; empty for none.
+      string color = 1;
+      // Short label written in the calendar cells; empty means the tag name.
+      string label = 2;
+    }
   }
 
   // User webhooks configuration.

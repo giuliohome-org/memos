@@ -2087,6 +2087,16 @@ components:
                     allOf:
                         - $ref: '#/components/schemas/User'
                     description: The authenticated user's information.
+        GeneralSetting_TagStyle:
+            type: object
+            properties:
+                color:
+                    type: string
+                    description: Color of the tag, e.g. "#ef4444"; empty for none.
+                label:
+                    type: string
+                    description: Short label written in the calendar cells; empty means the tag name.
+            description: How a tag shows up in the calendar.
         GoogleProtobufAny:
             type: object
             properties:
@@ -2972,6 +2982,17 @@ components:
                         The preferred theme of the user.
                          This references a CSS file in the web/public/themes/ directory.
                          If not set, the default theme will be used.
+                tagStyles:
+                    type: object
+                    additionalProperties:
+                        $ref: '#/components/schemas/GeneralSetting_TagStyle'
+                    description: Calendar style of each tag, keyed by tag name.
+                calendarWorkdaysOnly:
+                    type: boolean
+                    description: Show only Monday to Friday in the calendar.
+                calendarAllMonths:
+                    type: boolean
+                    description: List memos of every month instead of only the month shown by the calendar.
             description: General user settings configuration.
         UserSetting_WebhooksSetting:
             type: object

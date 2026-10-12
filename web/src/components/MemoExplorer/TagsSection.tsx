@@ -3,7 +3,7 @@ import { useState } from "react";
 import useLocalStorage from "react-use/lib/useLocalStorage";
 import { Switch } from "@/components/ui/switch";
 import { type MemoFilter, useMemoFilterContext } from "@/contexts/MemoFilterContext";
-import { TAG_COLOR_PALETTE, useTagColors } from "@/hooks/useTagColors";
+import { TAG_COLOR_PALETTE, useCalendarPreferences } from "@/hooks/useCalendarPreferences";
 import { cn } from "@/lib/utils";
 import { useTranslate } from "@/utils/i18n";
 import TagTree from "../TagTree";
@@ -14,12 +14,24 @@ interface Props {
   tagCount: Record<string, number>;
 }
 
-const TagColorPicker = ({ tag, tagColor, onColorChange }: {
+const TagColorPicker = ({
+  tag,
+  tagColor,
+  tagLabel,
+  onColorChange,
+  onLabelChange,
+}: {
   tag: string;
   tagColor: string | undefined;
+  tagLabel: string;
   onColorChange: (tag: string, color: string | null) => void;
+  onLabelChange: (tag: string, label: string) => void;
 }) => {
+  const t = useTranslate();
   const [open, setOpen] = useState(false);
+  const saveLabel = (value: string) => {
+    if (value.trim() !== tagLabel) onLabelChange(tag, value);
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -37,10 +49,7 @@ const TagColorPicker = ({ tag, tagColor, onColorChange }: {
           }}
         >
           {tagColor ? (
-            <span
-              className="block w-3 h-3 rounded-full mr-0.5"
-              style={{ backgroundColor: tagColor }}
-            />
+            <span className="block w-3 h-3 rounded-full mr-0.5" style={{ backgroundColor: tagColor }} />
           ) : (
             <HashIcon className="w-4 h-auto" />
           )}
@@ -76,6 +85,24 @@ const TagColorPicker = ({ tag, tagColor, onColorChange }: {
             </button>
           )}
         </div>
+        <label className="mt-2 flex w-[140px] flex-col gap-1 text-xs text-muted-foreground">
+          {t("common.calendar-label")}
+          <input
+            type="text"
+            className="w-full rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground"
+            defaultValue={tagLabel}
+            placeholder={tag}
+            maxLength={40}
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                saveLabel(e.currentTarget.value);
+                setOpen(false);
+              }
+            }}
+            onBlur={(e) => saveLabel(e.currentTarget.value)}
+          />
+        </label>
       </PopoverContent>
     </Popover>
   );
@@ -86,7 +113,7 @@ const TagsSection = (props: Props) => {
   const { getFiltersByFactor, addFilter, removeFilter } = useMemoFilterContext();
   const [treeMode, setTreeMode] = useLocalStorage<boolean>("tag-view-as-tree", false);
   const [treeAutoExpand, setTreeAutoExpand] = useLocalStorage<boolean>("tag-tree-auto-expand", false);
-  const { tagColors, setTagColor } = useTagColors();
+  const { tagStyles, setTagStyle } = useCalendarPreferences();
 
   const tags = Object.entries(props.tagCount)
     .sort((a, b) => a[0].localeCompare(b[0]))
@@ -135,7 +162,7 @@ const TagsSection = (props: Props) => {
           <div className="w-full flex flex-row justify-start items-center relative flex-wrap gap-x-2 gap-y-1.5">
             {tags.map(([tag, amount]) => {
               const isActive = getFiltersByFactor("tagSearch").some((filter: MemoFilter) => filter.value === tag);
-              const tagColor = tagColors[tag];
+              const tagColor = tagStyles[tag]?.color || undefined;
               return (
                 <div
                   key={tag}
@@ -146,7 +173,13 @@ const TagsSection = (props: Props) => {
                   )}
                   onClick={() => handleTagClick(tag)}
                 >
-                  <TagColorPicker tag={tag} tagColor={tagColor} onColorChange={setTagColor} />
+                  <TagColorPicker
+                    tag={tag}
+                    tagColor={tagColor}
+                    tagLabel={tagStyles[tag]?.label ?? ""}
+                    onColorChange={(name, color) => setTagStyle(name, { color: color ?? "" })}
+                    onLabelChange={(name, label) => setTagStyle(name, { label })}
+                  />
                   <div className="inline-flex flex-nowrap ml-0.5 gap-0.5 max-w-[calc(100%-16px)]">
                     <span className={cn("truncate", isActive ? "font-medium" : "")}>{tag}</span>
                     {amount > 1 && <span className="opacity-60 shrink-0">({amount})</span>}

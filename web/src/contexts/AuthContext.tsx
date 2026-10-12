@@ -1,10 +1,23 @@
+import { create } from "@bufbuild/protobuf";
+import { FieldMaskSchema } from "@bufbuild/protobuf/wkt";
 import { useQueryClient } from "@tanstack/react-query";
-import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { clearAccessToken } from "@/auth-state";
 import { authServiceClient, shortcutServiceClient, userServiceClient } from "@/connect";
+import { buildUserSettingName } from "@/helpers/resource-names";
 import { userKeys } from "@/hooks/useUserQueries";
 import type { Shortcut } from "@/types/proto/api/v1/shortcut_service_pb";
-import type { User, UserSetting_GeneralSetting, UserSetting_WebhooksSetting } from "@/types/proto/api/v1/user_service_pb";
+import {
+  type User,
+  type UserSetting_GeneralSetting,
+  UserSetting_GeneralSettingSchema,
+  UserSetting_Key,
+  type UserSetting_WebhooksSetting,
+  UserSettingSchema,
+} from "@/types/proto/api/v1/user_service_pb";
+
+/** Fields of the general setting to change; the field names go in the update mask. */
+export type GeneralSettingPatch = Omit<Partial<UserSetting_GeneralSetting>, "$typeName">;
 
 interface AuthState {
   currentUser: User | undefined;
@@ -19,6 +32,8 @@ interface AuthContextValue extends AuthState {
   initialize: () => Promise<void>;
   logout: () => Promise<void>;
   refetchSettings: () => Promise<void>;
+  /** Applies the patch at once and saves it; `updateMask` uses the proto field names. */
+  updateGeneralSetting: (patch: GeneralSettingPatch, updateMask: string[]) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -127,6 +142,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [fetchUserSettings]);
 
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const generalSettingRequest = useRef(0);
+
+  const updateGeneralSetting = useCallback(
+    async (patch: GeneralSettingPatch, updateMask: string[]) => {
+      const userName = stateRef.current.currentUser?.name;
+      setState((prev) => ({
+        ...prev,
+        userGeneralSetting: { ...(prev.userGeneralSetting ?? create(UserSetting_GeneralSettingSchema)), ...patch },
+      }));
+      if (!userName) return;
+
+      // Only the answer to the latest request may replace the optimistic state.
+      const request = ++generalSettingRequest.current;
+      try {
+        const saved = await userServiceClient.updateUserSetting({
+          setting: create(UserSettingSchema, {
+            name: buildUserSettingName(userName, UserSetting_Key.GENERAL),
+            value: { case: "generalSetting", value: create(UserSetting_GeneralSettingSchema, patch) },
+          }),
+          updateMask: create(FieldMaskSchema, { paths: updateMask }),
+        });
+        if (request === generalSettingRequest.current && saved.value.case === "generalSetting") {
+          const savedGeneral = saved.value.value;
+          setState((prev) => ({ ...prev, userGeneralSetting: savedGeneral }));
+        }
+      } catch (error) {
+        console.error("Failed to update general setting:", error);
+        await refetchSettings();
+        throw error;
+      }
+    },
+    [refetchSettings],
+  );
+
   // Memoize context value to prevent unnecessary re-renders of consumers
   const value = useMemo(
     () => ({
@@ -134,8 +185,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       initialize,
       logout,
       refetchSettings,
+      updateGeneralSetting,
     }),
-    [state, initialize, logout, refetchSettings],
+    [state, initialize, logout, refetchSettings, updateGeneralSetting],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

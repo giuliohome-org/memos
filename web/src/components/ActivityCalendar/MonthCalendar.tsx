@@ -16,7 +16,7 @@ export const MonthCalendar = memo((props: MonthCalendarProps) => {
   const t = useTranslate();
   const { generalSetting } = useInstance();
   const { getFiltersByFactor } = useMemoFilterContext();
-  const { getColorsForDate } = useTagCalendarData();
+  const { getColorsForDate, getEntriesForDate } = useTagCalendarData();
 
   const weekStartDayOffset = generalSetting.weekStartDayOffset;
 
@@ -38,7 +38,7 @@ export const MonthCalendar = memo((props: MonthCalendarProps) => {
   const gridColumns = workdaysOnly ? "grid-cols-5" : "grid-cols-7";
 
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
+    <div className={cn("@container flex flex-col gap-2", className)}>
       <div className={cn("grid", gridColumns, sizeConfig.gap, "text-muted-foreground mb-1", size === "small" ? "text-[10px]" : "text-xs")}>
         {rotatedWeekDays.map((label, index) => (
           <div key={index} className="flex h-4 items-center justify-center text-muted-foreground/60 font-medium">
@@ -62,6 +62,7 @@ export const MonthCalendar = memo((props: MonthCalendarProps) => {
                 size={size}
                 highlight={highlightedDays?.has(day.date)}
                 tagColors={getColorsForDate(day.date)}
+                entries={size === "default" ? getEntriesForDate(day.date) : undefined}
               />
             );
           }),
