@@ -7,7 +7,6 @@ import StatisticsView from "@/components/StatisticsView";
 import { userServiceClient } from "@/connect";
 import { useMemoFilterContext } from "@/contexts/MemoFilterContext";
 import { useMemoFilters } from "@/hooks";
-import { useMigrateLocalCalendarPreferences } from "@/hooks/useCalendarPreferences";
 import useCurrentUser from "@/hooks/useCurrentUser";
 import { useFilteredMemoStats } from "@/hooks/useFilteredMemoStats";
 import useMediaQuery from "@/hooks/useMediaQuery";
@@ -28,7 +27,6 @@ const MainLayout = () => {
   const highlightFilter = [memoFilter, visibilityFilter].filter(Boolean).join(" && ") || undefined;
   const { data: memosResponse } = useMemos({ filter: highlightFilter });
   const memos = memosResponse?.memos || [];
-  useMigrateLocalCalendarPreferences();
 
   // Determine context based on current route
   const context: MemoExplorerContext = useMemo(() => {
